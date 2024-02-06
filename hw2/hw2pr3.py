@@ -301,32 +301,24 @@ def grad_descent(X_train, y_train, X_val, y_val, reg=0.0, lr_W=2.5e-12, \
 		and iter_num < max_iter:
 
 		"*** YOUR CODE HERE ***"
-		# Calculate the training RMSE and validation RMSE
-		train_rmse = find_RMSE(np.vstack([b, W]), X_train, y_train)
-		val_rmse = find_RMSE(np.vstack([b, W]), X_val, y_val)
-
-		# Append the training RMSE and validation RMSE to obj_train and obj_val
+		# calculate norms
+		train_rmse = np.sqrt(np.linalg.norm((X_train @ W).reshape((-1, 1)) \
+			+ b - y_train) ** 2 / m_train)
 		obj_train.append(train_rmse)
+		val_rmse = np.sqrt(np.linalg.norm((X_val @ W).reshape((-1, 1)) \
+			+ b - y_val) ** 2 / m_val)
 		obj_val.append(val_rmse)
-
-		# Calculate the gradient for W and b
-		# take derivative of the loss function wrt W and b
-		W_grad = (X_train.T @ X_train + reg * np.eye(n)) @ W + X_train.T @ (b - y_train)
-		b_grad = sum(X_train @ W) - sum(y_train) + b * m_train 
-
-		# Upgrade W and b
+		# calculate gradient
+		W_grad = ((X_train.T @ X_train + reg * np.eye(n)) @ W \
+			+ X_train.T @ (b - y_train)) / m_train
+		b_grad = (sum(X_train @ W) - sum(y_train) + b * m_train) / m_train
+		# update weights and bias
 		W -= lr_W * W_grad
 		b -= lr_b * b_grad
-		
-
-		"*** END YOUR CODE HERE ***"
-
-		# print statements for debugging
+		# print statements
 		if (iter_num + 1) % print_freq == 0:
 			print('-- Iteration{} - training rmse {: 4.4f} - gradient norm {: 4.4E}'.format(\
 				iter_num + 1, train_rmse, np.linalg.norm(W_grad)))
-
-		# goes to next iteration
 		iter_num += 1
 
 
