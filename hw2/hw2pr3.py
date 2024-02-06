@@ -192,6 +192,7 @@ def norm_vs_lambda(X_train, y_train, X_val, y_val):
 	plt.figure()
 	plt.scatter(reg_list, norm_list_train, label='training')
 	plt.scatter(reg_list, norm_list_val, label='validation')
+	plt.legend()
 	plt.title('norm vs lambda')
 	plt.xlabel('lambda')
 	plt.ylabel('norm')
@@ -301,32 +302,33 @@ def grad_descent(X_train, y_train, X_val, y_val, reg=0.0, lr_W=2.5e-12, \
 		and iter_num < max_iter:
 
 		"*** YOUR CODE HERE ***"
-		# calculate norms
-		train_rmse = np.sqrt(np.linalg.norm((X_train @ W).reshape((-1, 1)) \
-			+ b - y_train) ** 2 / m_train)
+		# get the norm for train
+		train_rmse = np.sqrt(np.linalg.norm((X_train @ W).reshape((-1, 1)) + b - y_train) ** 2 / m_train)
+		# save the norm
 		obj_train.append(train_rmse)
-		val_rmse = np.sqrt(np.linalg.norm((X_val @ W).reshape((-1, 1)) \
-			+ b - y_val) ** 2 / m_val)
+		# get the norm for validation
+		val_rmse = np.sqrt(np.linalg.norm((X_val @ W).reshape((-1, 1)) + b - y_val) ** 2 / m_val)
+		# save the norm
 		obj_val.append(val_rmse)
+
 		# calculate gradient
-		W_grad = ((X_train.T @ X_train + reg * np.eye(n)) @ W \
-			+ X_train.T @ (b - y_train)) / m_train
+		W_grad = ((X_train.T @ X_train + reg * np.eye(n)) @ W + X_train.T @ (b - y_train)) / m_train
 		b_grad = (sum(X_train @ W) - sum(y_train) + b * m_train) / m_train
-		# update weights and bias
+
+		# update weights and bias according to their respective lrs
 		W -= lr_W * W_grad
 		b -= lr_b * b_grad
-		# print statements
+
+		# print periodic statements
 		if (iter_num + 1) % print_freq == 0:
 			print('-- Iteration{} - training rmse {: 4.4f} - gradient norm {: 4.4E}'.format(\
 				iter_num + 1, train_rmse, np.linalg.norm(W_grad)))
 		iter_num += 1
 
-
 	# Benchmark report
 	t_end = time.time()
 	print('--Time elapsed for training: {t:4.2f} seconds'.format(\
 			t=t_end - t_start))
-
 
 	# generate convergence plot
 	plt.figure()
