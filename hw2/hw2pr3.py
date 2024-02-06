@@ -220,17 +220,19 @@ def linreg_no_bias(X, y, reg=0.0):
 	# Find the numerical solution in part d
 	# TODO: Solve for W_opt, and b_opt
 	"*** YOUR CODE HERE ***"
-	A = X.T@(np.eye(X.shape[0]) - (1/X.shape[0])*np.ones((X.shape[0], X.shape[0]))@ np.ones((X.shape[0], X.shape[0])).T)@X + reg*np.eye(X.shape[0])
-	B = X.T@(np.eye(X.shape[0]) - (1/X.shape[0])*np.ones((X.shape[0], X.shape[0]))@ np.ones((X.shape[0], X.shape[0])).T)@y
-	W_opt = np.linalg.solve(A, B)
-
-	b_opt = sum(y - X@W_opt)/X.shape[0]
+	m = X.shape[0]
+	Aggregate = X.T @ (np.eye(m) - np.ones(m) / m)
+	W_opt = np.linalg.solve(Aggregate @ X + reg * np.eye(Aggregate.shape[0]), \
+		Aggregate @ y)
+	b_opt = sum((y - X @ W_opt)) / m
 	"*** END YOUR CODE HERE ***"
 
 	# Benchmark report
 	t_end = time.time()
 	print('--Time elapsed for training: {t:4.2f} seconds'.format(\
 			t=t_end - t_start))
+	
+	print(W_opt, b_opt)
 
 	return b_opt, W_opt
 
