@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+from tqdm import trange
 from mnist_2 import *
 
 def cartesian_to_polar(x, y, center):
@@ -165,8 +166,13 @@ def find_cut_fit_line(img_data, show_plot = False):
         plt.show()
     return models, chi2reds
 
-def benchmark_0_1(num_times=1000):
+def benchmark_0_1(X_train, y_train, num_times=1000):
     '''run cut and fit process num_times for 0s and 1s and compare the chi2red distributions.'''
+    # get only 0s
+    zeros = X_train[y_train == 0]
+    # get only 1s
+    ones = X_train[y_train == 1]
+    
     chi2red_zeroL = []
     chi2red_zeroR = []
     chi2red_oneL = []
@@ -215,9 +221,51 @@ def benchmark_0_1(num_times=1000):
     plt.tight_layout()
     plt.savefig(f'results2/chi2red_comp_{num_times}.png')
 
-if __name__ == '__main__':
-    from tqdm import trange
 
+def benchmark_all(X_train, y_train, num_times=1000):
+    '''run cut and fit process num_times for all digits and compare the chi2red distributions.'''
+    
+    # divide up the data by digit
+    data = {i: X_train[y_train == i] for i in range(10)}
+
+    # create empty lists for each digit
+    chi2reds_L = {i: [] for i in range(10)}
+    chi2reds_R = {i: [] for i in range(10)}
+
+    for i in trange(num_times):
+        for digit in range(10):
+            try:
+                _, chi2reds = find_cut_fit_line(data[digit][i])
+                chi2reds_L[digit].append(chi2reds[0])
+                chi2reds_R[digit].append(chi2reds[1])
+            except:
+                pass
+
+    # remove infinite values
+    for digit in range(10):
+        chi2reds_L[digit] = [x for x in chi2reds_L[digit] if x != np.inf]
+        chi2reds_R[digit] = [x for x in chi2reds_R[digit] if x != np.inf]
+
+    # create total histogram of 10*2 = 20 total panels, organized 5 rows, 4 columns
+    # calculate avg and sem for each
+    fig, axs = plt.subplots(5, 4, figsize=(20, 20))
+
+    for digit in range(10):
+        row = digit // 2
+        col = digit % 2
+        axs[row, col].hist(chi2reds_L[digit], bins=20)
+        avg = np.mean(chi2reds_L[digit])
+        sem = np.std(chi2reds_L[digit]) / np.sqrt(len(chi2reds_L[digit]))
+        axs[row, col].set_title(f'{digit} Left: $\\chi^2_\\nu = {avg:.2f} \\pm {sem:.2f}$')
+        axs[row, col+2].hist(chi2reds_R[digit], bins=20)
+        avg = np.mean(chi2reds_R[digit])
+        sem = np.std(chi2reds_R[digit]) / np.sqrt(len(chi2reds_R[digit]))
+        axs[row, col+2].set_title(f'{digit} Right: $\\chi^2_\\nu = {avg:.2f} \\pm {sem:.2f}$')
+
+    plt.tight_layout()
+    plt.savefig(f'results2/chi2red_comp_all_{num_times}.png')
+
+if __name__ == '__main__':
     if not os.path.exists('results2'):
         os.makedirs('results2')
     # X_train, y_train, X_val, y_val, X_test, y_test = load_data() # run this once to save the data
@@ -225,12 +273,9 @@ if __name__ == '__main__':
     y_train = np.load('data/y_train.npy', allow_pickle=True)
     y_train = y_train.astype(int)
 
-    # get only 0s
-    zeros = X_train[y_train == 0]
-    # get only 1s
-    ones = X_train[y_train == 1]
+    
 
     # find_cut_and_fit_line(zeros[0], show_plot=True)
     # find_cut_and_fit_line(ones[0], show_plot=True)
 
-    benchmark_0_1(1000)
+    benchmark_all(X_train, y_train, 1000)
