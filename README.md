@@ -19,7 +19,8 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
     
     fit line through the points in each section and plot residuals.
 
-* added ```find_cut_fit_line``` and ```find_sig_max_density_x``` to plot_polar.py to perform the cutting based on finding maximum density slicing along x axis (only selected if max density - min density > threshold, otherwise use x center), and then fit to a line in each section and compute chi2red. we find chi2red dist is quite different whether digit is 0 (basically 0) and 1 (between 0.5-1) --- we wrote ```benchmark_0_1``` to test this.
+* added ```find_cut_fit_line``` and ```find_sig_max_density_x``` to plot_polar.py to perform the cutting based on finding maximum density slicing along x axis (only selected if max density - min density > threshold, otherwise use x center), and then fit to a line in each section and compute chi2red. we find chi2red dist is quite different whether digit is 0 (basically 0) and 1 (between 0.5-1) --- we wrote ```benchmark_0_1``` to test this. 
+** see https://docs.google.com/presentation/d/1qfD0HpdRbFuNRSLlWijFRz0Avbvnl0FUcPCgRj7Q0yU/edit#slide=id.p for pres link
 
 
 
