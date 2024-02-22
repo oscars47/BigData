@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from tqdm import trange
 from mnist_2 import *
+import json
 
 def cartesian_to_polar(x, y, center):
     '''Convert Cartesian coordinates to polar (radius and angle).'''
@@ -288,6 +289,10 @@ def benchmark_all(X_train, y_train, num_times=1000):
         sem = np.std(chi2reds_R[digit]) / np.sqrt(len(chi2reds_R[digit]))
         axs[row, col+2].set_title(f'{digit} Right: $\\chi^2_\\nu = {avg:.2f} \\pm {sem:.2f}$')
 
+    # save the chi2red dict as .json
+    with open(f'results2/chi2red_{num_times}.json', 'w') as f:
+        json.dump({'chi2reds_L': chi2reds_L, 'chi2reds_R': chi2reds_R}, f)
+    
     plt.tight_layout()
     plt.savefig(f'results2/chi2red_comp_all_{num_times}.png')
 
@@ -304,4 +309,4 @@ if __name__ == '__main__':
     # find_cut_and_fit_line(zeros[0], show_plot=True)
     # find_cut_and_fit_line(ones[0], show_plot=True)
 
-    benchmark_all(X_train, y_train, 10000)
+    benchmark_all(X_train, y_train, 100)
