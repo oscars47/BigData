@@ -2,6 +2,21 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
+## 2/21/24
+* testing out idea to run cut and fit on all digits to see how the digit maps to distribution of chi2 maps
+** massively increased computational speed
+** ran total num 1000 and 10000
+** result illustrates clear relationship between chi2red of L,R and digit identity, which suggests we can determine digit placement by these statistics
+* realized sometimes we cut at the very last index, so because of that considering combined L and R chi2
+* strategy of closest difference: 0.2746 accuracy... see confusion matrix
+* if we only compared 0 to 1, got accuracy of 0.93235
+* what if we used multiple cuts? say take initial 2, then split 2 into 2 each for total of 4: 0 vs 1 accuracy increases to 0.988, but with other digits decreases to 0.272
+* added code for medial axis-- will work on this for later:
+    That is to use the algorithm to connect nearest point from the current point to the next. Then find angles of two consecutive vectors of P1 to P2, and P2 to P3, if the angle is too large above certain threshold then stop and cut. Thanks 
+
+    We will try to use this method to iteratively achieve better results and make each piece to have a function representation. Then study its deformations and define equivalent classes.
+
+
 ## 2/20/24
 * what gu wants:
     Please cut each digit to the top and bottom pieces. Then click a piece is linear you don’t need to transfer to polor coordinates. 
