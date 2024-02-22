@@ -117,8 +117,10 @@ def find_cut_fit_line(img_data, show_plot = False):
     # Define the regions to the left and right of the cut
     left_region_filter = xs < max_density_x
     right_region_filter = xs > max_density_x
-    
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))  # Prepare subplots
+
+    if show_plot:
+        fig, axes = plt.subplots(2, 2, figsize=(10, 10))  # Prepare subplots
+
     models = []
     chi2reds = []
 
@@ -144,22 +146,23 @@ def find_cut_fit_line(img_data, show_plot = False):
         # Store results
         models.append((model.coef_[0], model.intercept_))
         chi2reds.append(chi2red)
-        
-        # Plot image and fit as well as residuals
-        ax_img.imshow(processed, cmap='gray', origin='lower')
-        ax_img.scatter(region_x_coords, region_y_coords, color='red')
-        line_x = np.array([region_x_coords.min(), region_x_coords.max()])
-        line_y = model.coef_[0] * line_x + model.intercept_
-        ax_img.plot(line_x, line_y, color='blue', linewidth=2)
-        ax_img.set_xlim([0, processed.shape[1]])
-        ax_img.set_ylim([0, processed.shape[0]])
-        ax_img.set_title(f'Line {index+1}, $\\chi^2_\\nu = {chi2red:.2f}$')
-        
-        ax_res.scatter(region_x_coords, residuals, color='red')
-        ax_res.axhline(0, color='black', linewidth=1)
-        ax_res.set_xlim([0, processed.shape[1]])
-        ax_res.set_ylim([min(residuals), max(residuals)])
-        ax_res.set_title(f'Residuals Line {index+1}')
+
+        if show_plot:
+            # Plot image and fit as well as residuals
+            ax_img.imshow(processed, cmap='gray', origin='lower')
+            ax_img.scatter(region_x_coords, region_y_coords, color='red')
+            line_x = np.array([region_x_coords.min(), region_x_coords.max()])
+            line_y = model.coef_[0] * line_x + model.intercept_
+            ax_img.plot(line_x, line_y, color='blue', linewidth=2)
+            ax_img.set_xlim([0, processed.shape[1]])
+            ax_img.set_ylim([0, processed.shape[0]])
+            ax_img.set_title(f'Line {index+1}, $\\chi^2_\\nu = {chi2red:.2f}$')
+            
+            ax_res.scatter(region_x_coords, residuals, color='red')
+            ax_res.axhline(0, color='black', linewidth=1)
+            ax_res.set_xlim([0, processed.shape[1]])
+            ax_res.set_ylim([min(residuals), max(residuals)])
+            ax_res.set_title(f'Residuals Line {index+1}')
 
     if show_plot:
         plt.tight_layout()
