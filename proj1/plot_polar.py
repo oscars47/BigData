@@ -123,31 +123,30 @@ def find_cut_fit_line(img_data, show_plot = False):
 
     models = []
     chi2reds = []
+    if show_plot:
+        for index, (region_filter, ax_img, ax_res) in enumerate(zip(
+            [left_region_filter, right_region_filter], axes[0], axes[1])):
+            
+            region_x_coords = xs[region_filter]
+            region_y_coords = ys[region_filter]
 
-    for index, (region_filter, ax_img, ax_res) in enumerate(zip(
-        [left_region_filter, right_region_filter], axes[0], axes[1])):
-        
-        region_x_coords = xs[region_filter]
-        region_y_coords = ys[region_filter]
+            if len(region_x_coords) == 0:  # Check if there are no points in the region
+                continue
+            
+            # Linear regression
+            X = region_x_coords.reshape(-1, 1)
+            y = region_y_coords
+            model = LinearRegression().fit(X, y)
+            
+            # Calculate normalized residuals and chi2red
+            residuals = y - model.predict(X)
+            chi2 = np.sum((residuals / y)**2)
+            chi2red = chi2 / (len(y) - 2)
+            
+            # Store results
+            models.append((model.coef_[0], model.intercept_))
+            chi2reds.append(chi2red)
 
-        if len(region_x_coords) == 0:  # Check if there are no points in the region
-            continue
-        
-        # Linear regression
-        X = region_x_coords.reshape(-1, 1)
-        y = region_y_coords
-        model = LinearRegression().fit(X, y)
-        
-        # Calculate normalized residuals and chi2red
-        residuals = y - model.predict(X)
-        chi2 = np.sum((residuals / y)**2)
-        chi2red = chi2 / (len(y) - 2)
-        
-        # Store results
-        models.append((model.coef_[0], model.intercept_))
-        chi2reds.append(chi2red)
-
-        if show_plot:
             # Plot image and fit as well as residuals
             ax_img.imshow(processed, cmap='gray', origin='lower')
             ax_img.scatter(region_x_coords, region_y_coords, color='red')
@@ -164,9 +163,33 @@ def find_cut_fit_line(img_data, show_plot = False):
             ax_res.set_ylim([min(residuals), max(residuals)])
             ax_res.set_title(f'Residuals Line {index+1}')
 
-    if show_plot:
-        plt.tight_layout()
-        plt.show()
+            plt.tight_layout()
+            plt.show()
+
+    else:
+        for index, region_filter in enumerate(
+            [left_region_filter, right_region_filter]):
+            
+            region_x_coords = xs[region_filter]
+            region_y_coords = ys[region_filter]
+
+            if len(region_x_coords) == 0:  # Check if there are no points in the region
+                continue
+            
+            # Linear regression
+            X = region_x_coords.reshape(-1, 1)
+            y = region_y_coords
+            model = LinearRegression().fit(X, y)
+            
+            # Calculate normalized residuals and chi2red
+            residuals = y - model.predict(X)
+            chi2 = np.sum((residuals / y)**2)
+            chi2red = chi2 / (len(y) - 2)
+            
+            # Store results
+            models.append((model.coef_[0], model.intercept_))
+            chi2reds.append(chi2red)
+        
     return models, chi2reds
 
 def benchmark_0_1(X_train, y_train, num_times=1000):
@@ -281,4 +304,4 @@ if __name__ == '__main__':
     # find_cut_and_fit_line(zeros[0], show_plot=True)
     # find_cut_and_fit_line(ones[0], show_plot=True)
 
-    benchmark_all(X_train, y_train, 1000)
+    benchmark_all(X_train, y_train, 10000)
