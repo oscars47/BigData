@@ -2,6 +2,14 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
+## 2/26/24
+* started lit review at 8:30pm.
+* trying out larry's idea to train NN based on training on the angles of vectors: ```vec_angles.py```
+* worked til 11:42. built recursive alg to explore the skeleton from a starting point and then select only 1/5 of the points to deal with noise.
+* worked 3:30am - 4:30am. considered connecting points based on both minimum distance and minimum cost to travel along the non0 pixels. improvement from just naively connecting the selected pixels but still difficult to deal with disconnected sections in the original which translate to disconnections in the skeleton and thus to the simplified skeleton
+* fixed number of red dots per skeleton so this way we can compute the angles which are a fixed number and then feed that into NN
+* We can order the angles based on x position since the start points won’t be same
+
 ## 2/21/24
 * testing out idea to run cut and fit on all digits to see how the digit maps to distribution of chi2 maps
 ** massively increased computational speed
