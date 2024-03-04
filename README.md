@@ -2,6 +2,41 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
+## 3/3/24
+* 6:56 pm start, break at 8:52pm
+* 9:39pm start, break at 11:49pm
+* 4:25 am start,  
+* what we want to do:
+    - fix the bounding box
+    - for 0 and 1, overplot all of the skeletons
+    - need function to "unskeletonize"
+        - plot distribution about the skeletons for 0 and 1
+    - find the beta, s, h params for each using procustes
+    - construct fake digits
+    - think about slicing 
+* what we did: 
+    - fixed ```get_standardized()```: first apply ```rotate_pca```, then apply threshold, then ```find_bounding_box```. this leads to best results for skeletons. added seprate function to adjust the aspect ratio when scaling up from base bounding box or to preserve aspect ratio and thus add padding
+    - writing new file ```bsh.py```.
+        - here whole point is to not standardize so we figure out how much to scale/rotate
+        - added ```create_target()``` function to generate target images for each class. 2-9 are pretty straight so we will need to make more "smooth"
+        - finding procustes distance to target. procustes does not include shearing. interestingly disparity
+            - what if we use disparity directly to do classification? on first 100 of train images, got 0.25 accuracy.
+            - ```scipy.spatial.procustes``` doesn't return the optimal scaling etc params, so writing custom function ```find_bsh``` to do this
+                - get weird artifacts
+            - compare based on PCA to get angle? check difference in angles. 
+                - got example of pca comparison and angles
+                - got data for all so can plot! make slides of this: ```comp_bsh_pca()```. quite fast, about 70 it/s.
+        - plotted first mean of 100 0s and 1s: gives a sense of the spread in skeletons
+    - still to do: 
+        - (tomorrow) make plots of bsh comparison of 0 vs 1 data
+        - (tomorrow) create new digits
+        - (later) cut other digit types and decompose into parts (clarify w Gu)
+
+
+
+## 2/27/24
+* worked on presentation, also added plot of angles; added path only connectivity
+
 ## 2/26/24
 * started lit review at 8:30pm.
 * trying out larry's idea to train NN based on training on the angles of vectors: ```vec_angles.py```

@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from mnist_2 import *
-from skimage.morphology import medial_axis
+from skimage.morphology import medial_axis, skeletonize
 from collections import deque
 
 
@@ -97,13 +97,22 @@ def bfs_path_length(skel, start, end):
                 queue.append(((nx, ny), dist + 1))
     return -1  # Return -1 if no path exists
 
-def find_nearest_with_path(skel, start, points, include_path=True):
-    """Find the nearest point to 'start' in 'points' for which a path exists."""
+def find_nearest_with_path(skel, start, points, dist_opt=0):
+    """Find the nearest point to 'start' in 'points' for which a path exists.
+
+    Params:
+    skel: 2D numpy array representing the skeleton.
+    start: Tuple (x, y) representing the starting point.
+    points: 2D numpy array of points to search for the nearest one.
+    dist_opt: 0 for euclidean distance, 1 for path length only, 2 for both.
+    
+    
+    """
     min_distance = np.inf
     min_cost = np.inf
     nearest_point = None
     for point in points:
-        if include_path:
+        if dist_opt==2:
             path_cost= bfs_path_length(skel, tuple(start), tuple(point))
             print(f'Path cost: {path_cost}')
             if path_cost != -1:
@@ -112,14 +121,19 @@ def find_nearest_with_path(skel, start, points, include_path=True):
                     min_distance = distance
                     nearest_point = point
                     min_cost = path_cost
-        else:
+        elif dist_opt==1:
             distance = np.linalg.norm(start - point)
             if distance < min_distance:
                 min_distance = distance
                 nearest_point = point
+        else:
+            path_cost= bfs_path_length(skel, tuple(start), tuple(point))
+            if path_cost != -1 and path_cost < min_cost:
+                min_cost = path_cost
+                nearest_point = point
     return nearest_point
 
-def connect_points_with_path(skel, points, include_path=True):
+def connect_points_with_path(skel, points, dist_opt=0):
     """Connect points considering the nearest neighbor with a valid path."""
     if len(points) == 0:
         return []
@@ -132,7 +146,7 @@ def connect_points_with_path(skel, points, include_path=True):
     while points_list:
         current_point = connected_points[-1]
         # if np.all(current_point == points[0]):
-        nearest_point = find_nearest_with_path(skel, current_point, np.array(points_list), include_path=include_path)
+        nearest_point = find_nearest_with_path(skel, current_point, np.array(points_list), dist_opt=dist_opt)
         # else:
         #     nearest_point = find_nearest_with_path(skel, current_point, np.array(points_list+points[0]))
         if nearest_point is not None:
@@ -145,9 +159,8 @@ def connect_points_with_path(skel, points, include_path=True):
     return pairs
         
 
-def calculate_angles(skel, debug=False, const=10):
+def calculate_angles(skel, const=10):
     '''calculate the angles between the pixels in the skeleton.'''
-    angles = []
 
     # get a non-zero pixel
     x, y = np.nonzero(skel)
@@ -166,10 +179,18 @@ def calculate_angles(skel, debug=False, const=10):
     visited = start_traversal(skel, x_s, y_s, const)
 
     # connect the points
-    pairs_path = connect_points_with_path(skel, np.array(visited), include_path=True)
-    pairs = connect_points_with_path(skel, np.array(visited), include_path=False)
+    pairs_path_only = connect_points_with_path(skel, np.array(visited), dist_opt=0)
+    pairs_distance_only = connect_points_with_path(skel, np.array(visited), dist_opt=1)
+    pairs_both = connect_points_with_path(skel, np.array(visited), dist_opt=2)
+
+    # calculate the angles between the path_only
+    angles = []
+    for (x1, y1), (x2, y2) in pairs_path_only:
+        dx, dy = x2 - x1, y2 - y1
+        angle = np.arctan2(dy, dx) 
+        angles.append(angle)
                  
-    return angles, visited, pairs_path, pairs
+    return angles, visited, pairs_path_only, pairs_distance_only, pairs_both
 
 
 def skeletonize(img_data, index, plot_img=False):
@@ -188,35 +209,65 @@ def skeletonize(img_data, index, plot_img=False):
     skel = skel > 0
 
     # calculate the angles
-    angles, visited, pairs_path, pairs = calculate_angles(skel)
+    angles, visited, pairs_path_only, pairs_distance_only, pairs_both = calculate_angles(skel)
     
     # plot the original and the skeleton
     if plot_img:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axs = plt.subplots(1, 3, figsize=(15, 5))
         axs[0].imshow(img, cmap='gray')
         axs[0].set_title('Original Image')
         axs[1].imshow(skel, cmap='gray')
         axs[1].set_title('Skeleton')
         axs[1].scatter([y for x, y in visited], [x for x, y in visited], c='r')
-        for (x1, y1), (x2, y2) in pairs_path[:-1]:
-            axs[1].plot([y1, y2], [x1, x2], 'b', linewidth=2, alpha=0.5)
+
+        for (x1, y1), (x2, y2) in pairs_path_only[:-1]:
+            axs[1].plot([y1, y2], [x1, x2], 'b', linewidth=2, alpha=0.7)
         # add label the last point to denote this is with pairs_path
-        (x1, y1), (x2, y2) = pairs_path[-1]
-        axs[1].plot([y1, y2], [x1, x2], 'b', linewidth=2, alpha=0.5, label='Path and Distance')
+        (x1, y1), (x2, y2) = pairs_path_only[-1]
+        axs[1].plot([y1, y2], [x1, x2], 'b', linewidth=2, alpha=0.7, label='Path')
         # add a label to the start point
-        axs[1].text(y1, x1, 'Start', fontsize=12, color='b', alpha=1)
+        initial_point = pairs_path_only[0][0]
+        axs[1].text(initial_point[1], initial_point[0], 'Start', fontsize=12, color='b', alpha=1)
         # add a label to the last point
-        axs[1].text(y2, x2, 'End', fontsize=12, color='b', alpha=1)
-        for (x1, y1), (x2, y2) in pairs[:-1]:
-            axs[1].plot([y1, y2], [x1, x2], 'y', linewidth=2, alpha=0.5)
-        # add label the last point to denote this is w/0 path
-        (x1, y1), (x2, y2) = pairs[-1]
-        axs[1].plot([y1, y2], [x1, x2], 'y', linewidth=2, alpha=0.5, label='Distance')
-        # add a label to the start point
-        axs[1].text(y1, x1, 'Start', fontsize=12, color='y', alpha=1)
+        final_point = pairs_path_only[-1][-1]
+        axs[1].text(final_point[1], final_point[0], 'End', fontsize=12, color='b', alpha=1)
+
+        for (x1, y1), (x2, y2) in pairs_distance_only:
+            axs[1].plot([y1, y2], [x1, x2], 'g', linewidth=2, alpha=0.7, linestyle='--')
+
+        # add label the last point to denote this is with pairs_distance
+        (x1, y1), (x2, y2) = pairs_distance_only[-1]
+        axs[1].plot([y1, y2], [x1, x2], 'g', linewidth=2, alpha=0.7, label='Distance', linestyle='--')
+        initial_point = pairs_distance_only[0][0]
+        axs[1].text(initial_point[1], initial_point[0], 'Start', fontsize=12, color='g', alpha=1)
         # add a label to the last point
-        axs[1].text(y2, x2, 'End', fontsize=12, color='y', alpha=1)
+        final_point = pairs_distance_only[-1][-1]
+        axs[1].text(final_point[1], final_point[0], 'End', fontsize=12, color='g', alpha=1)
+
+
+        for (x1, y1), (x2, y2) in pairs_both:
+            axs[1].plot([y1, y2], [x1, x2], 'y', linewidth=2, alpha=0.7, linestyle='dashdot')
+
+        # add label the last point to denote this is with pairs_both
+        (x1, y1), (x2, y2) = pairs_both[-1]
+        axs[1].plot([y1, y2], [x1, x2], 'y', linewidth=2, alpha=0.7, label='Both', linestyle='dashdot')
+
+        initial_point = pairs_both[0][0]
+        axs[1].text(initial_point[1], initial_point[0], 'Start', fontsize=12, color='y', alpha=1)
+        # add a label to the last point
+        final_point = pairs_both[-1][-1]
+        axs[1].text(final_point[1], final_point[0], 'End', fontsize=12, color='y', alpha=1)
         axs[1].legend()
+
+        # plot the angles
+        # sort angles based on the x coordinate
+        # pairs_path_only.sort(key=lambda x: x[0][0])
+        # angles = np.array(angles)
+        # angles = angles[pairs_path_only[0][0][0]:pairs_path_only[-1][0][0]]
+        axs[2].plot(angles, 'b')
+        axs[2].set_title('Angles')
+        # axs[2].scatter(range(len(angles)), angles, c='r')
+
         
   
 
@@ -261,7 +312,7 @@ if __name__ == '__main__':
 #                     # display the vector and angle
 #                     if debug:
 #                         plt.imshow(skel, cmap='gray')
-#                         plt.plot([y, ny], [x, nx], 'r', linewidth=0.5, alpha=0.5)
+#                         plt.plot([y, ny], [x, nx], 'r', linewidth=0.5, alpha=0.7)
 #                         plt.text((y+ny)/2, (x+nx)/2, f'{angle:.2f}', fontsize=5, color='r')
 #                         plt.show()
                     
