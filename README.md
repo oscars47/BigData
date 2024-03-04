@@ -5,7 +5,7 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 ## 3/3/24
 * 6:56 pm start, break at 8:52pm
 * 9:39pm start, break at 11:49pm
-* 4:25 am start,  
+* 4:25 am start,  5:41 am finish
 * what we want to do:
     - fix the bounding box
     - for 0 and 1, overplot all of the skeletons
