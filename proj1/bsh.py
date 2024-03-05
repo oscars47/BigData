@@ -194,7 +194,7 @@ def classify_disparity(X_data, Y_data):
     ax.set_yticklabels(np.arange(10))
     ax.set_xlabel('Predicted')
     ax.set_ylabel('True')
-    ax.set_title('Confusion Matrix')
+    ax.set_title(f'Confusion Matrix, Accuracy: {accuracy:.4f}')
     plt.savefig('results_skel/confusion_matrix.pdf')
 
 def find_bsh(img_data, target, show=False, index=None):
@@ -294,7 +294,7 @@ def find_bsh_correct(img_data, target, show=False, index=None):
     A /= aS	
     B /= bS
 
-    # Compute the covariance matrix from escalar product of sets
+    # Compute the covariance matrix from scalar product of sets
     C = np.dot(B.T, A)
 
     # Decompose point cloud into orthonormal bases (U, V being U transposed as in 'np.fliplr(np.rot90(U))') and singular values (S/_)
@@ -413,13 +413,13 @@ def find_bsh_pca(img_data, target, show=False, index=None, return_diff_lst=False
 
     if show:
 
-        print(f'Image angle:{img_angle}')
-        print(f'Targ angle:{targ_angle}')
-        print(f'Angle diff:{angle_diff}')
-        print(f'Scale factor x:{scale_factor_x}')
-        print(f'Scale factor y:{scale_factor_y}')
-        print(f'Shear factor:{shear_factor}')
-        print(f'Img diff dist:{img_diff_dist_mean}')
+        print(f'Image angle: {img_angle}')
+        print(f'Targ angle: {targ_angle}')
+        print(f'Angle diff: {angle_diff}')
+        print(f'Scale factor x: {scale_factor_x}')
+        print(f'Scale factor y: {scale_factor_y}')
+        print(f'Shear factor: {shear_factor}')
+        print(f'Img diff dist: {img_diff_dist_mean}')
 
         # plot comparison of original img data, targ, with pca vecs
         fig, axs = plt.subplots(3, 2, figsize=(10, 10))
@@ -569,72 +569,79 @@ def comp_bsh_pca(X_data, target):
     # save results
     results.to_csv(f'results_skel/pca_results_{target}_{len(X_data)}.csv')
 
-    
 
-    
-    # fig, axs = plt.subplots(3, 2, figsize=(10, 10))
-    # # the right half we only plot once
-    # axs[0][1].imshow(TARGS[target], cmap='gray')
-    # # plot pca vecs. make sure they start at the center of the image
-    # colors = ['r', 'b']
+def plot_comp_bsh_pca(pca_result_path_ls=['results_skel/pca_results_0_4407.csv', 'results_skel/pca_results_1_5109.csv'], dist_path='results_skel/dist'):
+    '''plot the results of comp_bsh_pca'''
 
-    # for i, component in enumerate(targ_vecs):
-    # # Direction for the PCA vector
-    #     dx, dy = component[0],component[1]  
-    #     # Plot the vector from the center with scaling
-    #     scale = 10 * targ_var[i]/targ_var[0]
-    #     axs[0][0].quiver(center_targ[0], center_targ[1], dx, dy, scale=scale, color=colors[i])
+    # initialize dict to store results
+    pca_results_dict = {}
 
-    # axs[0][1].set_title('Target Image')
-    # axs[1][1].imshow(targ_pca, cmap='gray')
-    # axs[1][1].set_title('PCA Target Image')
-    # # plot bounding boxes
-    # axs[2][1].imshow(bbox_targ, cmap='gray')
-    # axs[2][1].set_title('Bounding Box Target')
-    
-    
-    # axs[0][0].imshow(img_data.reshape(28, 28), cmap='gray')
-    # # plot pca vecs. make sure they start at the center of the image
+    # load the results
+    for pca_result_path in pca_result_path_ls:
+        # get target
+        target = pca_result_path.split('_')[-2]
+        results = pd.read_csv(pca_result_path)
+        pca_results_dict[target] = results
 
-    # colors = ['r', 'b']
+    # for each target, plot the results
+    def plot_dist(target):
+        '''plot the results'''
 
-    # for i, component in enumerate(img_vecs):
-    # # Direction for the PCA vector
-    #     dx, dy = component[0],component[1]  
-    #     # Plot the vector from the center with scaling
-    #     scale = 10 * img_var[i]/img_var[0]
-    #     axs[0][0].quiver(center_img[0], center_img[1], dx, dy, scale=scale, color=colors[i])
+        # get the target info
+        results = pca_results_dict[target]
 
-    # axs[0][0].set_title('Original Image')
-    # axs[0][1].imshow(TARGS[target], cmap='gray')
-    
-    # for i, component in enumerate(targ_vecs):
-    # # Direction for the PCA vector
-    #     dx, dy = component[0],component[1]  
-    #     # Plot the vector from the center with scaling
-    #     scale = 10 * targ_var[i]/targ_var[0]
-    #     axs[0][1].quiver(center_targ[0], center_targ[1], dx, dy, scale=scale, color=colors[i])
+        # plot this
+        # angle diff, scale_factor_x, scale_factor_y, shear_factor, img_diff_dist_mean, img_dist_mean
+        fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+        axs[0][0].hist(results['angle_diff'], bins=100)
+        axs[0][0].set_title('Angle Diff')
+        axs[0][1].hist(results['scale_factor_x'], bins=100)
+        axs[0][1].set_title('Scale Factor X')
+        axs[0][2].hist(results['scale_factor_y'], bins=100)
+        axs[0][2].set_title('Scale Factor Y')
+        axs[1][0].hist(results['shear_factor'], bins=100)
+        axs[1][0].set_title('Shear Factor')
+        axs[1][1].hist(results['img_diff_dist_mean'], bins=100)
+        axs[1][1].set_title('Img Diff Dist Mean')
+        axs[1][2].hist(results['img_dist_mean'], bins=100)
+        axs[1][2].set_title('Img Dist Mean')
+        plt.savefig(f'results_skel/pca_results_{target}.pdf')
 
-    # axs[0][1].set_title('Target Image')
-    # axs[1][0].imshow(img_pca, cmap='gray')
-    # axs[1][0].set_title('PCA Image')
-    # axs[1][1].imshow(targ_pca, cmap='gray')
-    # axs[1][1].set_title('PCA Target Image')
-    # # plot bounding boxes
-    # axs[2][0].imshow(bbox_img, cmap='gray')
-    # axs[2][0].set_title('Bounding Box Image')
-    # axs[2][1].imshow(bbox_targ, cmap='gray')
-    # axs[2][1].set_title('Bounding Box Target')
-    # plt.savefig(f'results_skel/pca_{index}_{target}.pdf')
-    
-    # # new figure for distance
-    # plt.figure(figsize=(10, 5))
-    # plt.plot(img_dist, label='Image')
-    # plt.plot(targ_dist, label='Target')
-    # plt.plot(img_diff_dist, label='Diff')
-    # plt.legend()
-    # plt.savefig(f'results_skel/distances_{index}_{target}.pdf')
+        # then plot of img_list, img_diff_list
+        dist_files = os.listdir(dist_path)
+        img_list = [np.load(f'{dist_path}/{f}') for f in dist_files if f.startswith(f'img_ls') and f.endswith(f'{target}.npy')]
+        img_diff_list = [np.load(f'{dist_path}/{f}') for f in dist_files if f.startswith(f'img_diff_ls') and f.endswith(f'{target}.npy')]
 
+        fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+        for i in range(len(img_list)):
+            axs[0].plot(img_list[i], label=f'img_{i}')
+            axs[1].plot(img_diff_list[i], label=f'img_diff_{i}')
+        axs[0].set_title('Img List')
+        axs[1].set_title('Img Diff List')
+        plt.savefig(f'results_skel/dist_results_{target}.pdf')
+
+        # then plot of before and after pca images
+        img_orig_list = [np.load(f'{dist_path}/{f}') for f in dist_files if f.startswith(f'img_orig') and f.endswith(f'{target}.npy')]
+        img_pca_list = [np.load(f'{dist_path}/{f}') for f in dist_files if f.startswith(f'img_pca') and f.endswith(f'{target}.npy')]
+        bbox = [np.load(f'{dist_path}/{f}') for f in dist_files if f.startswith(f'bbox_img') and f.endswith(f'{target}.npy')]
+
+        fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+        for i in range(len(img_orig_list)):
+            axs[0].imshow(img_orig_list[i], cmap='gray', alpha=0.5)
+            axs[1].imshow(img_pca_list[i], cmap='gray', alpha=0.5)
+        axs[0].set_title('Original Image')
+        axs[1].set_title('PCA Image')
+        plt.savefig(f'results_skel/img_results_{target}.pdf')
+
+        # plot the bounding boxes
+        fig, axs = plt.subplots(1, 1, figsize=(5, 5))
+        for i in range(len(bbox)):
+            axs.imshow(bbox[i], cmap='gray', alpha=0.5)
+        axs.set_title('Bounding Box Image')
+        plt.savefig(f'results_skel/bbox_results_{target}.pdf')
+
+    for target in pca_results_dict.keys():
+        plot_dist(target)
 
 # compare all 0s vs 1s
 def compare_0_1(zeros, ones):
@@ -668,13 +675,27 @@ if __name__ == '__main__':
 
     zeros = X_train[y_train == 0]
     ones = X_train[y_train == 1]
+    twos = X_train[y_train == 2]
+    threes = X_train[y_train == 3]
+    fours = X_train[y_train == 4]
+    fives = X_train[y_train == 5]
+    sixes = X_train[y_train == 6]
+    sevens = X_train[y_train == 7]
+    eights = X_train[y_train == 8]
+    nines = X_train[y_train == 9]
 
-    # classify_disparity(X_train[:100], y_train[:100])
+    # select first 100 from each and combine
+    mini_total = np.concatenate((zeros[:100], ones[:100], twos[:100], threes[:100], fours[:100], fives[:100], sixes[:100], sevens[:100], eights[:100], nines[:100]), axis=0)
+    mini_total_targs = np.concatenate([np.repeat(i, 100) for i in range(10)])
+
+
+    classify_disparity(mini_total, mini_total_targs)
     # compare_0_1(zeros[:100], ones[:100])
     # for i in trange(100):
     #     find_bsh_correct(zeros[i], 0, show=True, index=i)
     #     find_bsh_correct(ones[i], 1, show=True, index=i)
     # find_bsh_pca(zeros[1], 0, show=True, index=1)
-    # find_bsh_pca(ones[2], 1, show=True, index=2)
-    comp_bsh_pca(zeros, 0)
+    # find_bsh_pca(ones[1], 1, show=True, index=1)
+    # comp_bsh_pca(zeros, 0)
     # comp_bsh_pca(ones, 1)
+    # plot_comp_bsh_pca()

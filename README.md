@@ -2,6 +2,15 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
+still to do:
+- fit stable distributions? but still have bimodal
+- construct fake digits
+- think about slicing 
+
+## 3/4/24
+* 4:00pm start, 5:32 finish 
+* made plots of everything. making presentation
+
 ## 3/3/24
 * 6:56 pm start, break at 8:52pm
 * 9:39pm start, break at 11:49pm
@@ -12,8 +21,7 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
     - need function to "unskeletonize"
         - plot distribution about the skeletons for 0 and 1
     - find the beta, s, h params for each using procustes
-    - construct fake digits
-    - think about slicing 
+    
 * what we did: 
     - fixed ```get_standardized()```: first apply ```rotate_pca```, then apply threshold, then ```find_bounding_box```. this leads to best results for skeletons. added seprate function to adjust the aspect ratio when scaling up from base bounding box or to preserve aspect ratio and thus add padding
     - writing new file ```bsh.py```.
