@@ -7,6 +7,30 @@ from collections import deque
 
 
 ## ---- skeletonize with medial axis ---- ##
+def skeletonize(img_data, show=False, standardize=True):
+    '''skeletonize the image using the medial axis and return a vector of angles.'''
+    # Preprocess the image
+    if standardize:
+        img = get_standardized(img_data)
+    else:
+        img = img_data.reshape(28, 28)
+    # find the medial axis
+    skel, _ = medial_axis(img, return_distance=True)
+    skel = skel > 0
+
+    if show:
+        img_orig = img_data.reshape(28, 28)
+        fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+        axs[0].imshow(img_orig, cmap='gray')
+        axs[0].set_title('Original Image')
+        axs[1].imshow(img, cmap='gray')
+        axs[1].set_title('Standardized Image')
+        axs[2].imshow(skel, cmap='gray')
+        axs[2].set_title('Skeleton')
+        plt.show()
+    return skel
+
+## ---- finding angles ---- ##
 def get_angle(nx, ny, x, y):
     dx, dy = nx - x, ny - y
     return np.arctan2(dy, dx) 
@@ -76,7 +100,6 @@ def start_traversal(skel, start_x, start_y, num_keep):
     visited = visited[::frac]
     return visited  # Returning visited for visualization or further processing
     
-
 def bfs_path_length(skel, start, end):
     """Return the number of steps in the shortest path between start and end points through non-zero pixels using BFS."""
     if start == end:  # If start and end points are the same
@@ -158,7 +181,6 @@ def connect_points_with_path(skel, points, dist_opt=0):
     
     return pairs
         
-
 def calculate_angles(skel, const=10):
     '''calculate the angles between the pixels in the skeleton.'''
 
@@ -192,27 +214,16 @@ def calculate_angles(skel, const=10):
                  
     return angles, visited, pairs_path_only, pairs_distance_only, pairs_both
 
-
-def skeletonize(img_data, index, plot_img=False):
-    '''skeletonize the image using the medial axis and return a vector of angles.'''
+def get_angles(img_data, index, show=False):
+    '''get the angles from the skeletonized image.'''
     # Preprocess the image
-    img = get_standardized(img_data)
-    bbox_image = find_bounding_box(img)
-    img = scale_and_convert_to_square(bbox_image)
-
-    # make binary
-    img = img > THRESHOLD
-
-    # find the medial axis
-    skel, distance = medial_axis(img, return_distance=True)
-
-    skel = skel > 0
-
+    skel = skeletonize(img_data)
     # calculate the angles
     angles, visited, pairs_path_only, pairs_distance_only, pairs_both = calculate_angles(skel)
     
     # plot the original and the skeleton
-    if plot_img:
+    if show:
+        img = get_standardized(img_data)
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
         axs[0].imshow(img, cmap='gray')
         axs[0].set_title('Original Image')
@@ -266,12 +277,7 @@ def skeletonize(img_data, index, plot_img=False):
         # angles = angles[pairs_path_only[0][0][0]:pairs_path_only[-1][0][0]]
         axs[2].plot(angles, 'b')
         axs[2].set_title('Angles')
-        # axs[2].scatter(range(len(angles)), angles, c='r')
 
-        
-  
-
-        # axs[1].legend()
         plt.savefig(f'results2/skeleton_{index}.png')
         plt.show()
 
@@ -281,7 +287,7 @@ def skeletonize(img_data, index, plot_img=False):
 
         print(f'Num Angles: {len(angles)}')
 
-        return skel, distance, angles
+        return skel, angles
     else:
         return angles
 
