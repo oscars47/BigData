@@ -10,6 +10,7 @@ from skimage.measure import EllipseModel
 from matplotlib.patches import Ellipse
 import pandas as pd
 from tqdm import tqdm
+from copy import deepcopy
 
 ## fitting 0 and 1 ##
 def fit_0_1(img, target=0):
@@ -68,7 +69,7 @@ def create_means(X_train, y_train, show_plot=True):
             # add fits to skeletonized images
             if i == 0:
                 xc, yc, a, b, theta = elp_params
-                elp_patch = Ellipse((xc, yc), 2*a, 2*b, theta*180/np.pi, edgecolor='red', facecolor='none', linewidth=2)
+                elp_patch = Ellipse((xc, yc), 2*a, 2*b, theta*180/np.pi, edgecolor='red', facecolor='none', line28=2)
 
                 axs[1][0].add_patch(elp_patch)
             elif i == 1:
@@ -79,7 +80,7 @@ def create_means(X_train, y_train, show_plot=True):
                 x_max = np.max(x1)
                 x = np.linspace(x_min, x_max, 100)
                 y = curve_1(x, *popt_1)
-                axs[1][i].plot(x, y, 'r', linewidth=2)
+                axs[1][i].plot(x, y, 'r', line28=2)
                 # set bound as 0 and 28
                 # axs[1][i].set_xlim([0, 28])
                 # axs[1][i].set_ylim([0, 28])
@@ -470,6 +471,142 @@ def cut_walk_main(imgs, threshold=90, show_start_points=True):
     for img in imgs:
         cut_walk(img, brightest_point, show_start_points=show_start_points, threshold=threshold)
 
+## find points of max directions ##
+def find_max_directions(img_data, threshold=120, show_plot=True):
+    '''computes the number of directions it is possible to walk on '''
+    img = img_data.reshape(28, 28)
+    img = img > threshold
+    img = medial_axis(img).astype(int)
+
+    # go through each pixel and find the number of possible directions
+    directions = np.zeros(img.shape)
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            if img[i, j] == 1:
+                # get the number of directions, which is a square of 3x3 minus the center
+                directions[i, j] = np.sum(img[i-1:i+2, j-1:j+2]) - 1 # don't want to count the center pixel
+
+    # Find max directions
+    max_directions = np.max(directions)
+    max_directions_idx = np.where(directions == max_directions)
+
+    max_directions_idx_y = max_directions_idx[0]
+    max_directions_idx_x = max_directions_idx[1]
+
+    if len(max_directions_idx_y) > 1:
+        # Adjacency check function: within 1 pixel of each other
+        def is_adjacent(idx1, idx2):
+            return abs(idx1[0] - idx2[0]) <= 1 and abs(idx1[1] - idx2[1]) <= 1
+
+        # Initialize groups of adjacent indices
+        groups = []
+
+        # Function to find the group an index belongs to
+        def find_groups(idx, groups):
+            belongs_to = []
+            for i, group in enumerate(groups):
+                if any(is_adjacent(idx, member) for member in group):
+                    belongs_to.append(i)
+            return belongs_to
+
+        # Group adjacent indices
+        for i in range(len(max_directions_idx_y)):
+            current_idx = (max_directions_idx_y[i], max_directions_idx_x[i])
+            idx_groups = find_groups(current_idx, groups)
+            
+            if idx_groups:
+                # Merge groups if necessary
+                if len(idx_groups) > 1:
+                    new_group = set()
+                    for g in idx_groups:
+                        new_group = new_group.union(groups[g])
+                    new_group.add(current_idx)
+                    groups[idx_groups[0]] = new_group
+                    for g in sorted(idx_groups[1:], reverse=True):
+                        del groups[g]
+                else:
+                    groups[idx_groups[0]].add(current_idx)
+            else:
+                # Create new group if no existing group is found
+                groups.append({current_idx})
+
+        # make sure to add the non-adjacent
+        for idx in zip(max_directions_idx_y, max_directions_idx_x):
+            if not any(idx in group for group in groups):
+                groups.append({idx})
+
+        # Select rightmost-bottom from each group
+        final_indices = [max(group, key=lambda x: (x[0], x[1])) for group in groups]
+
+        print("Final indices (rightmost-bottom of each group):", final_indices)
+
+    else:
+        final_indices = [(max_directions_idx_y[0], max_directions_idx_x[0])]
+
+    y, x = np.where(img == 1)
+    center = (np.mean(y), np.mean(x))
+       
+        
+    # plot img and heatmap
+    if show_plot:
+        fig, axs = plt.subplots(1, 1, figsize=(5, 5))
+        cmap = axs.imshow(directions, cmap='hot')
+        fig.colorbar(cmap, ax=axs)
+        final_indices_x = [i[0] for i in final_indices]
+        final_indices_y = [i[1] for i in final_indices]
+        axs.scatter(final_indices_y, final_indices_x, color='blue')
+        axs.scatter(center[1], center[0], color='green')
+        plt.savefig('results_skel/directions.pdf')
+        plt.show()
+
+    if center[1] < final_indices[0][1]:  # If to the right of center
+        print('Cut to the right and down')
+        for j in range(len(final_indices)):
+            y, x = final_indices[j]  # Assuming final_indices are (y, x) pairs
+            for i in [-1, 0, 1]:  # Check y-1, y, y+1 for horizontal cut
+                if 0 <= y+i < 28 and 0 < x+1 < 28:  # Ensure within bounds for right cut
+                    if img[y+i, x+1] == 1:
+                        print(f'cut right {j, i}')
+                        img[y+i, x+1] = 0
+            for dy in range(28 - y):  # Go straight down from the x
+                if 0 <= y+dy < 28:
+                    if img[y+dy, x] == 1:
+                        print(f'cut down from {j} at offset {dy}')
+                        img[y+dy, x] = 0
+    else:
+        print('Cut to the left and down')
+        for j in range(len(final_indices)):
+            y, x = final_indices[j]
+            for i in [-1, 0, 1]:  # Check y-1, y, y+1 for horizontal cut
+                if 0 <= y+i < 28 and 0 <= x-1 < 28:  # Ensure within bounds for left cut
+                    if img[y+i, x-1] == 1:
+                        print(f'cut left {j, i}')
+                        img[y+i, x-1] = 0
+            for dy in range(28 - y):  # Go straight down from the x
+                if 0 <= y+dy < 28:
+                    if img[y+dy, x] == 1:
+                        print(f'cut down from {j} at offset {dy}')
+                        img[y+dy, x] = 0
+                        
+
+
+    # replot img and old img
+    if show_plot:
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        axs[0].imshow(img_old, cmap='gray')
+        axs[0].set_title('Original Image')
+        axs[1].imshow(img, cmap='gray')
+        axs[1].set_title('Cut Image')
+        plt.savefig('results_skel/cut_img.pdf')
+        plt.show()
+
+    return img
+
+    
+    
+
+                
+
 if __name__ == '__main__':
     X_train = np.load('data/X_train.npy', allow_pickle=True)
     y_train = np.load('data/y_train.npy', allow_pickle=True)
@@ -486,7 +623,7 @@ if __name__ == '__main__':
     eights = X_train[y_train == 8]
     nines = X_train[y_train == 9]
 
-    get_pca_params(X_train, y_train)
+    find_max_directions(nines[0])
 
 
 
