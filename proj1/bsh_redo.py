@@ -273,6 +273,74 @@ def get_params_rel_mean(X_train, Y_train, angle_spacing=10):
     plt.tight_layout()
     plt.savefig(f'results_skel/zero_distances_{len(X0)}.pdf')
 
+def get_pca_params(X_train, Y_train):
+    '''gets histogram of diff of angle of principal axis relative to mean, as well as 1st and 2nd singular values of PCA of each digit
+
+    NOTE: only set up to plot for 0 and 1
+    
+    '''
+
+    def get_pca_params_single(X):
+        '''returns the rotation angle of the longer axis of PCA as well as the singular values'''
+        X = X.reshape(28, 28)
+        pca = PCA(n_components=2)
+        pca.fit(X)
+        # get singular values
+        singular_values = pca.singular_values_
+        # get rotation angle
+        angle = np.arctan2(pca.components_[0, 1], pca.components_[0, 0]) * (180.0 / np.pi)
+        return angle, singular_values
+        
+        
+    # get the PCA parameters
+    # get the PCA parameters
+    X0 = X_train[Y_train == 0]
+    X1 = X_train[Y_train == 1]
+    # get PCA parameters
+    params_0 = [get_pca_params_single(x0) for x0 in X0]
+    params_1 = [get_pca_params_single(x1) for x1 in X1]
+
+    angle_0 = np.array([i[0] for i in params_0])
+    singular_vals_0 = np.array([i[1] for i in params_0])
+
+    angle_1 = np.array([i[0] for i in params_1])
+    singular_vals_1 = np.array([i[1] for i in params_1])
+    
+    # get mean angles and singular values
+    mean_0 = np.mean(X0, axis=0)
+    mean_1 = np.mean(X1, axis=0)
+
+    mean_angle_0, mean_singular_vals_0 = get_pca_params_single(mean_0)
+    mean_angle_1, mean_singular_vals_1 = get_pca_params_single(mean_1)
+
+    angle_diff_0 = mean_angle_0 - angle_0
+    angle_diff_1 = mean_angle_1 - angle_1
+
+    # plot histograms, 2x3
+    fig, axs = plt.subplots(2, 3, figsize=(20, 10))
+    axs[0][0].hist(angle_diff_0, bins=100)
+    axs[0][0].set_title('Angle Difference 0')
+    axs[0][1].hist(singular_vals_0[:, 0], bins=100)
+    axs[0][1].vlines(mean_singular_vals_0[0], ymin=0, ymax=160, color='red', label='$\lambda_1$ of mean')
+    axs[0][1].set_title('First Singular Values 0')
+    axs[0][2].hist(singular_vals_0[:, 1], bins=100)
+    axs[0][2].vlines(mean_singular_vals_0[1], ymin=0, ymax=120, color='red', label='$\lambda_2$ of mean')
+    axs[0][2].set_title('Second Singular Values 0')
+
+    axs[1][0].hist(angle_diff_1, bins=100)
+    axs[1][0].set_title('Angle Difference 1')
+    axs[1][1].hist(singular_vals_1[:, 0], bins=100)
+    axs[1][1].vlines(mean_singular_vals_1[0], ymin=0, ymax=160, color='red', label='$\lambda_1$ of mean')
+    axs[1][1].set_title('First Singular Values 1')
+    axs[1][2].hist(singular_vals_1[:, 1], bins=100)
+    axs[1][2].vlines(mean_singular_vals_1[1], ymin=0, ymax=160, color='red', label='$\lambda_2$ of mean')
+    axs[1][2].set_title('Second Singular Values 1')
+    axs[0][1].legend()
+    axs[0][2].legend()
+    axs[1][1].legend()
+    axs[1][2].legend()
+    plt.savefig(f'results_skel/pca_params_{len(X_train)}.pdf')
+
 ## walking along digit ##
 def cut_walk(img, brightest_point, threshold = 90, show_start_points=True):
     '''cut the digit by walking along the digit. currently only works for 9'''
@@ -381,7 +449,6 @@ def cut_walk(img, brightest_point, threshold = 90, show_start_points=True):
     plt.savefig('results_skel/paths.pdf')
     plt.show()
     # find intersection of all paths
-        
 
 def cut_walk_main(imgs, threshold=90, show_start_points=True):
 
@@ -403,8 +470,6 @@ def cut_walk_main(imgs, threshold=90, show_start_points=True):
     for img in imgs:
         cut_walk(img, brightest_point, show_start_points=show_start_points, threshold=threshold)
 
-
-
 if __name__ == '__main__':
     X_train = np.load('data/X_train.npy', allow_pickle=True)
     y_train = np.load('data/y_train.npy', allow_pickle=True)
@@ -421,15 +486,17 @@ if __name__ == '__main__':
     eights = X_train[y_train == 8]
     nines = X_train[y_train == 9]
 
-    # get_params_rel_mean(X_train,  y_train)
+    get_pca_params(X_train, y_train)
+
+
 
     # zero_one_mini = np.concatenate((zeros[:100], ones[:100]), axis=0)
     # zero_one_y_mini = np.array([0]*100 + [1]*100)
     # zero_one_total = np.concatenate((zeros, ones), axis=0)
     # zero_one_y_total = np.array([0]*len(zeros) + [1]*len(ones))
     # create_means(zero_one_total, zero_one_y_total)
-    nines_y = np.array([9]*len(nines))
-    cut_walk_main(nines, show_start_points=True)
+    # nines_y = np.array([9]*len(nines))
+    # cut_walk_main(nines, show_start_points=True)
 
     # create_means(nines, nines_y)
     # average the means
