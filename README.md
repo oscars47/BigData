@@ -2,10 +2,36 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
-still to do:
-- fit stable distributions? but still have bimodal
-- construct fake digits
-- think about slicing 
+## 3/16/24
+* start 10pm, end 12am. 3:10 am start, 3:25 am finish.
+* n.b. maybe "max connectivity" is better term than "max direction"
+* continuing cutting: 
+    - calculate tangent line at the point. also draw vertical line through the point. this creates a grid. if point is below and to the right of the center, then remove the closest non0 pixel in the bottom right of this grid, and similar for other regions.
+
+## 3/15/24
+* start at 12:20pm, lunch at 1:25 pm. 2:50 pm, end at 4pm. start at 10pm, end 12:am
+    - had meeting 3-4.
+* working on cut_walk(). weird error with start points not being populated correctly. also, what to do about multiple possible paths? maybe combine neigboring ones that within 1 pixel of each other to 1, then make sure you don't traverse where others have gone?
+* after meeting, realized need to 
+    1. fix the 0 processing: PCA for 0 and 1, in bsh_redo.py
+    2. for cutting, find the max number of directions available and cut there. 
+* implemented 1 in bsh_redo.py.
+* started cutting. found point of max directions; grouped adjacent max direction points such that we always choose the bottom right
+
+
+## 3/10/24
+* start 8:40 pm, break 9:30pm. start 9:45 pm, 11:06 pm break
+* final 0/1 processing
+    - for 0: log difference d_i
+    - for 1: log length of 1 line.  
+        - don't think we need to implement proposed idea of forcing all 1 lines to go through the center bright point since that's just translation to a new center. fit the line, then fit it across the bounding box. log this length
+* added ```cut_walk()``` for 9s
+
+## 3/5/24
+* 4:30 start, 7:19 end (w meeting at 5:30)
+* changing target images. made file bsh_redo.py
+    - for 0, take mean of all and then skeleton, then fit curve.
+    - for 1, just fit a line to the skeleton and then measure angle.
 
 ## 3/4/24
 * 4:00pm start, 5:32 finish 

@@ -472,7 +472,7 @@ def cut_walk_main(imgs, threshold=90, show_start_points=True):
         cut_walk(img, brightest_point, show_start_points=show_start_points, threshold=threshold)
 
 ## find points of max directions ##
-def find_max_directions(img_data, threshold=120, show_plot=True):
+def find_max_directions(img_data, threshold=120, context_window=2, show_plot=True):
     '''computes the number of directions it is possible to walk on '''
     img = img_data.reshape(28, 28)
     img = img > threshold
@@ -546,7 +546,6 @@ def find_max_directions(img_data, threshold=120, show_plot=True):
     y, x = np.where(img == 1)
     center = (np.mean(y), np.mean(x))
        
-        
     # plot img and heatmap
     if show_plot:
         fig, axs = plt.subplots(1, 1, figsize=(5, 5))
@@ -559,53 +558,144 @@ def find_max_directions(img_data, threshold=120, show_plot=True):
         plt.savefig('results_skel/directions.pdf')
         plt.show()
 
-    if center[1] < final_indices[0][1]:  # If to the right of center
-        print('Cut to the right and down')
-        for j in range(len(final_indices)):
-            y, x = final_indices[j]  # Assuming final_indices are (y, x) pairs
-            for i in [-1, 0, 1]:  # Check y-1, y, y+1 for horizontal cut
-                if 0 <= y+i < 28 and 0 < x+1 < 28:  # Ensure within bounds for right cut
-                    if img[y+i, x+1] == 1:
-                        print(f'cut right {j, i}')
-                        img[y+i, x+1] = 0
-            for dy in range(28 - y):  # Go straight down from the x
-                if 0 <= y+dy < 28:
-                    if img[y+dy, x] == 1:
-                        print(f'cut down from {j} at offset {dy}')
-                        img[y+dy, x] = 0
-    else:
-        print('Cut to the left and down')
-        for j in range(len(final_indices)):
-            y, x = final_indices[j]
-            for i in [-1, 0, 1]:  # Check y-1, y, y+1 for horizontal cut
-                if 0 <= y+i < 28 and 0 <= x-1 < 28:  # Ensure within bounds for left cut
-                    if img[y+i, x-1] == 1:
-                        print(f'cut left {j, i}')
-                        img[y+i, x-1] = 0
-            for dy in range(28 - y):  # Go straight down from the x
-                if 0 <= y+dy < 28:
-                    if img[y+dy, x] == 1:
-                        print(f'cut down from {j} at offset {dy}')
-                        img[y+dy, x] = 0
+    fig, axs = plt.subplots(1, 1, figsize=(5, 5))
+    cmap = axs.imshow(directions, cmap='hot')
+    fig.colorbar(cmap, ax=axs)
+    final_indices_x = [i[0] for i in final_indices]
+    final_indices_y = [i[1] for i in final_indices]
+    axs.scatter(final_indices_y, final_indices_x, color='blue')
+    axs.scatter(center[1], center[0], color='green')
+    for i in final_indices:
+        # Ensure context_window doesn't exceed image bounds
+        x_min = max(i[1]-context_window, 0)
+        x_max = min(i[1]+context_window, img.shape[1])
+        y_min = max(i[0]-context_window, 0)
+        y_max = min(i[0]+context_window, img.shape[0])
+        
+        # Get the 3x3 square around the point (with boundary checks)
+        square = img[y_min:y_max+1, x_min:x_max+1]
+        
+        # Get the points
+        y, x = np.where(square == 1)
+        
+        # Adjust x and y to the context of the whole image
+        x = x + x_min
+        y = y + y_min
+
+        # Fit a line using polyfit, where x serves as the independent variable and y as the dependent
+        slope, _ = np.polyfit(x, y, 1)
+
+        # Plot the line
+        # Define a range for x that covers the extent of the plot for visualization
+        x_line = np.array([x_min, x_max])
+        intercept = i[0] - slope * i[1]  # Adjust equation to use point as reference
+        y_line = slope * x_line + intercept  # Adjust equation to use point as reference
+        axs.plot(x_line, y_line, color='purple', linestyle='--')
+        axs.vlines(i[1], ymin=y_min, ymax=y_max, color='purple', linestyle='dotted')
+
+        # determine what quadrant relative to the center this point is
+        # bottom right
+        if i[0] > center[0] and i[1] > center[1]:
+            print('bottom right')
+            # remove the closest non-0 pixel to the right and bottom of the vertical line through the point and the tangent line
+            # condition: x > i[1] and y > i[0] and y - slope*x - intercept > 0
+            # get the points
+            y, x = np.where(img == 1)
+            # get the points that satisfy the condition
+            condition = ((x > i[1]) | (x == i[1]))  & ((y > i[0]) |(y == i[0]))  & ((y - slope*x - intercept > 0) | (y - slope*x - intercept == 0)) 
+            # condition = (x != i[1]) & (y != i[0]) & condition
+            y, x = y[condition], x[condition]
+            # get the distances
+            # axs.scatter(x, y, color='gold')
+            dists = np.sqrt((x - i[1])**2 + (y - i[0])**2)
+            print(dists)
+            # remove the closest point that satisfies the condition
+            closest_point = (y[np.argmin(dists)], x[np.argmin(dists)])
+            print('closest', closest_point)
+            axs.scatter(closest_point[1], closest_point[0], color='magenta')
+            img[closest_point[1], closest_point[0]] = 0
+        # top right
+        elif i[0] < center[0] and i[1] > center[1]:
+            # remove the closest non-0 pixel to the right and top of the vertical line through the point and the tangent line
+            # condition: x > i[1] and y < i[0] and y - slope*x - intercept < 0
+            # get the points
+            y, x = np.where(img == 1)
+            # get the points that satisfy the condition
+            condition = ((x > i[1]) | (x == i[1])) & ((y < i[0]) | (y == i[0])) & ((y - slope*x - intercept < 0) | (y - slope*x - intercept == 0))
+            condition = (x != i[1]) & (y != i[0]) & condition
+            y, x = y[condition], x[condition]
+            # get the distances
+            # axs.scatter(x, y, color='magenta')
+            dists = np.sqrt((x - i[1])**2 + (y - i[0])**2)
+            print(dists)
+            # remove the closest point that satisfies the condition
+            closest_point = (y[np.argmin(dists)], x[np.argmin(dists)])
+            print('closest', closest_point)
+            axs.scatter(closest_point[1], closest_point[0], color='magenta')
+            img[closest_point[1], closest_point[0]] = 0
+        # top left
+        elif i[0] < center[0] and i[1] < center[1]:
+            # remove the closest non-0 pixel to the left and top of the vertical line through the point and the tangent line
+            # condition: x < i[1] and y < i[0] and y - slope*x - intercept > 0
+            # get the points
+            y, x = np.where(img == 1)
+            # get the points that satisfy the condition
+            condition = ((x < i[1]) | (x == i[1])) & ((y < i[0]) | (y == i[0])) & ((y - slope*x - intercept > 0) | (y - slope*x - intercept == 0))
+            condition = (x != i[1]) & (y != i[0]) & condition
+            y, x = y[condition], x[condition]
+            # get the distances
+            # axs.scatter(x, y, color='magenta')
+            dists = np.sqrt((x - i[1])**2 + (y - i[0])**2)
+            print(dists)
+            # remove the closest point that satisfies the condition
+            closest_point = (y[np.argmin(dists)], x[np.argmin(dists)])
+            print('closest', closest_point)
+            axs.scatter(closest_point[1], closest_point[0], color='magenta')
+            img[closest_point[1], closest_point[0]] = 0
+
+        # bottom left
+        elif i[0] > center[0] and i[1] < center[1]:
+            # remove the closest non-0 pixel to the left and bottom of the vertical line through the point and the tangent line
+            # condition: x < i[1] and y > i[0] and y - slope*x - intercept < 0
+            # get the points
+            y, x = np.where(img == 1)
+            # get the points that satisfy the condition
+            condition = ((x < i[1]) | (x == i[1])) & ((y > i[0]) | (y == i[0])) & ((y - slope*x - intercept < 0) | (y - slope*x - intercept == 0))
+            condition = (x != i[1]) & (y != i[0]) & condition
+            y, x = y[condition], x[condition]
+            # get the distances
+            # axs.scatter(x, y, color='magenta')
+            dists = np.sqrt((x - i[1])**2 + (y - i[0])**2)
+            print(dists)
+            # remove the closest point that satisfies the condition
+            closest_point = (y[np.argmin(dists)], x[np.argmin(dists)])
+            print('closest', closest_point)
+            axs.scatter(closest_point[1], closest_point[0], color='magenta')
+            img[closest_point[1], closest_point[0]] = 0
+
+        # Draw box around fit region
+        axs.plot([x_min, x_max, x_max, x_min, x_min], 
+                [y_min, y_min, y_max, y_max, y_min], color='purple')
+    plt.savefig('results_skel/directions_tangent.pdf')
+    plt.show()
+
+
+
+
+
+
                         
-
-
-    # replot img and old img
-    if show_plot:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        axs[0].imshow(img_old, cmap='gray')
-        axs[0].set_title('Original Image')
-        axs[1].imshow(img, cmap='gray')
-        axs[1].set_title('Cut Image')
-        plt.savefig('results_skel/cut_img.pdf')
-        plt.show()
+    # # replot img and old img
+    # if show_plot:
+    #     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    #     axs[0].imshow(img_old, cmap='gray')
+    #     axs[0].set_title('Original Image')
+    #     axs[1].imshow(img, cmap='gray')
+    #     axs[1].set_title('Cut Image')
+    #     plt.savefig('results_skel/cut_img.pdf')
+    #     plt.show()
 
     return img
-
-    
-    
-
-                
 
 if __name__ == '__main__':
     X_train = np.load('data/X_train.npy', allow_pickle=True)
@@ -623,7 +713,7 @@ if __name__ == '__main__':
     eights = X_train[y_train == 8]
     nines = X_train[y_train == 9]
 
-    find_max_directions(nines[0])
+    find_max_directions(nines[6])
 
 
 
