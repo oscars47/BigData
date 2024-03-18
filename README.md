@@ -2,6 +2,12 @@ Code for Math 179 (Big Data at HMC) with Prof. Gu.
 
 # Project 1: Predicting MNIST digits using direct algorithm
 
+## 3/17/24
+* presentation: 2:30pm - 3:30pm. 7:50pm start , 8:58pm finish
+* just removing blue dots to create manifolds, then add them back once we know which are the separate pieces. not sure how interesting the question of "closed" is since you can have images that are broken up into multiple manifolds and won't ever be closed
+    - realized have to consider not just max connectivity, but where connectivity > 2. this will only be 3
+    - added separate functions within find_max_directions() for count_directions() and is_manifold()
+
 ## 3/16/24
 * start 10pm, end 12am. 3:10 am start, 3:25 am finish.
 * n.b. maybe "max connectivity" is better term than "max direction"
