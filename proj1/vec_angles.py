@@ -217,13 +217,20 @@ def calculate_angles(skel, const=10):
 def get_angles(img_data, index, show=False):
     '''get the angles from the skeletonized image.'''
     # Preprocess the image
-    skel = skeletonize(img_data)
+    img = img_data.reshape(28, 28)
+    y, x =  np.where(img > 0)
+    threshold_y = np.mean(y)
+    threshold_x = np.mean(x)
+    mean_bright = np.mean([threshold_y, threshold_x])
+    threshold = 240 - np.abs(mean_bright / 14)*52
+    img = img > threshold
+    skel = medial_axis(img)
     # calculate the angles
     angles, visited, pairs_path_only, pairs_distance_only, pairs_both = calculate_angles(skel)
     
     # plot the original and the skeleton
     if show:
-        img = get_standardized(img_data)
+        # img = get_standardized(img_data)
         fig, axs = plt.subplots(1, 3, figsize=(15, 5))
         axs[0].imshow(img, cmap='gray')
         axs[0].set_title('Original Image')
@@ -278,7 +285,7 @@ def get_angles(img_data, index, show=False):
         axs[2].plot(angles, 'b')
         axs[2].set_title('Angles')
 
-        plt.savefig(f'results2/skeleton_{index}.png')
+        plt.savefig(f'results2/skeleton_{index}.pdf')
         plt.show()
 
         # count numbers of non-zero pixels
@@ -301,7 +308,7 @@ if __name__ == '__main__':
     y_train = y_train.astype(int)
 
     index = np.random.randint(0, len(X_train))
-    skeletonize(X_train[index], index, plot_img=True)
+    get_angles(X_train[index], index, show=True)
 
 
 #    for x in range(skel.shape[0]):
