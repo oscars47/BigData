@@ -21,7 +21,7 @@ def comp_skel(img_data, threshold=230,  index=None, num_class=None):
     threshold_y = np.mean(y)
     threshold_x = np.mean(x)
     mean_bright = np.mean([threshold_y, threshold_x])
-    print('Mean Brightness:', mean_bright)
+    # print('Mean Brightness:', mean_bright)
     
     if threshold is None:
         threshold = 230 - np.abs(14.5-mean_bright)*60
@@ -448,11 +448,10 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
     threshold_y = np.mean(y)
     threshold_x = np.mean(x)
     mean_bright = np.mean([threshold_y, threshold_x])
-    print('Mean Brightness:', mean_bright)
+    # print('Mean Brightness:', mean_bright)
     
     if threshold is None:
         threshold = 240 - np.abs(mean_bright / 14)*52
-    
     
     img = img > threshold
     img = medial_axis(img).astype(int)
@@ -493,9 +492,9 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
         # max_directions = np.max(directions)
         # print("Max directions:", max_directions)
         # max_directions_idx = np.where(directions == max_directions)
-        print(directions)
+        # print(directions)
         max_directions_idx = np.where(directions > 2)
-        print("Max directions indices:", max_directions_idx)
+        # print("Max directions indices:", max_directions_idx)
 
         max_directions_idx_y = max_directions_idx[0]
         max_directions_idx_x = max_directions_idx[1]
@@ -548,15 +547,15 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
             else:
                 final_indices = [(max_directions_idx_y[0], max_directions_idx_x[0])]
 
-            print("Final indices (rightmost-bottom of each group):", final_indices)
+            # print("Final indices (rightmost-bottom of each group):", final_indices)
 
         elif len(max_directions_idx_y) == 1:
             final_indices = [(max_directions_idx_y[0], max_directions_idx_x[0])]
-            print("Final indices (single):", final_indices)
+            # print("Final indices (single):", final_indices)
 
         else:
             final_indices = []
-            print('No max directions found')
+            # print('No max directions found')
 
         return final_indices
 
@@ -564,9 +563,13 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
     center = (np.mean(y), np.mean(x))
 
     directions = count_directions(img)
-    max_direction = np.max(directions)
-    print('Max Directions:', max_direction)
+    # remove all points with directions less than 2
+    directions[directions < 2] = 0
+    img[directions < 2] = 0
+    # max_direction = np.max(directions)
+    # print('Max Directions:', max_direction)
     final_indices = find_final_indices(directions)
+
 
     if len(final_indices) == 0:
         if show_plot:
@@ -599,7 +602,6 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
     manifolds = []
     for i in range(1, num_features+1):
         manifold = np.where(labeled_array == i, 1, 0)
-        print(i)
         # ensure it's a manifold
         while not is_manifold(manifold):
             # find the max directions and repeat process
@@ -608,11 +610,20 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
             for j in final_indices_2:
                 manifold[j[0], j[1]] = 0
         manifolds.append(manifold)
-        print('append')
     
     result = np.zeros(img.shape)
     for i, manifold in enumerate(manifolds):
         result += manifold
+
+    labeled_array, num_features = label(result, structure=np.ones((3, 3)))
+
+    # remove manifolds with only 1 pixel
+    for i in range(1, num_features+1):
+        if np.sum(labeled_array == i) == 1:
+            result[labeled_array == i] = 0
+
+    directions = count_directions(result)
+    final_indices = find_final_indices(directions)
 
     labeled_array, num_features = label(result, structure=np.ones((3, 3)))
 
@@ -639,7 +650,50 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
             plt.savefig(f'results_skel/directions_{time}.pdf')
         plt.show()
 
-    return img
+    return labeled_array
+
+def get_mean_std_cuts(X, y):
+    '''for each class, get all of the labeled arrays and compute the mean and std'''
+    # break up X into different classes
+    X_split = {}
+    for i in np.unique(y):
+        X_split[i] = X[y == i]
+    
+    # get the labeled arrays
+    labeled_arrays = {}
+    for i in np.unique(y):
+        labeled_arrays[i] = [find_max_directions(img, threshold=None, show_plot=False) for img in tqdm(X_split[i])]
+
+    # get mean and std
+    mean_std = {}
+    for i in np.unique(y):
+        mean_std[i] = (np.mean(labeled_arrays[i], axis=0), np.std(labeled_arrays[i], axis=0))
+
+    # save
+    for i in np.unique(y):
+        np.save(f'results_skel/mean_{i}_labeled_arrays.npy', labeled_arrays[i])
+        np.save(f'results_skel/mean_std_{i}.npy', mean_std[i])
+
+    # create image
+    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    axs = axs.flatten()
+    for i in np.unique(y):
+        cmap = axs[i].imshow(mean_std[i][0], cmap='nipy_spectral')
+        fig.colorbar(cmap, ax=axs[i])
+        axs[i].set_title(f'Mean {i}')
+    plt.savefig('results_skel/mean_std_cuts.pdf')
+    plt.show()
+
+    # image for std
+    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    axs = axs.flatten()
+    for i in np.unique(y):
+        cmap = axs[i].imshow(mean_std[i][1], cmap='nipy_spectral')
+        fig.colorbar(cmap, ax=axs[i])
+        axs[i].set_title(f'Std {i}')
+    plt.savefig('results_skel/mean_std_cuts_std.pdf')
+
+    return mean_std
 
 if __name__ == '__main__':
     X_train = np.load('data/X_train.npy', allow_pickle=True)
@@ -657,12 +711,13 @@ if __name__ == '__main__':
     eights = X_train[y_train == 8]
     nines = X_train[y_train == 9]
 
-    index = 0
-    # find_max_directions(fives[index], index=index, num_class=5, threshold=None)
-    comp_skel(nines[index], index=index, num_class=9, threshold=None)
+    index = 5
+    find_max_directions(fives[index], index=index, num_class=5, threshold=None)
+    # comp_skel(fours[index], index=index, num_class=4, threshold=100)
+
+    # get_mean_std_cuts(X_train, y_train)
 
     # determine_threshold(X_train, y_train)
-
 
 
     # zero_one_mini = np.concatenate((zeros[:100], ones[:100]), axis=0)

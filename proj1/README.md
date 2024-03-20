@@ -1,5 +1,17 @@
 # Project 1: Predicting MNIST digits using direct algorithm
 
+## 3/19/24
+* start 4:35pm, end 7pm, including meeting. 8:30pm start, 8:40pm. 
+* first getting mean, std of the cut pieces for each digit
+    - ```find_max_directions()``` in ```bsh_redo.py```
+    - removed lone points (connectivity <2)
+* then will fit line to mean of angles for each digit, use this to predict
+    - fixed issue where didn't include exactly ```num_keep```
+    - added ```predict_angles``` using ```angles.csv```.
+
+* get all labeled graph
+    -  use skeleton
+
 ## 3/18/24
 * start 3pm, end 7pm (2 hours dasion lit review)
 * including graph theory approach for presentation; back to ```mnist_idea.py```. using igraph instead of networkx

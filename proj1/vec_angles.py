@@ -2,8 +2,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from mnist_2 import *
-from skimage.morphology import medial_axis, skeletonize
+from skimage.morphology import medial_axis
 from collections import deque
+from tqdm import trange, tqdm
+import pandas as pd
 
 
 ## ---- skeletonize with medial axis ---- ##
@@ -37,7 +39,8 @@ def get_angle(nx, ny, x, y):
 
 def thin_skeleton(skel, thinning_percentage=80):
     total_pixels = np.count_nonzero(skel)
-    target_removal = int(total_pixels * (thinning_percentage / 100.0))
+    # target_removal = int(total_pixels * (thinning_percentage / 100.0))
+    num_keep = 5
     removed = 0
 
     # Function to find edge pixels
@@ -49,15 +52,17 @@ def thin_skeleton(skel, thinning_percentage=80):
                     edge_pixels.append((x, y))
         return edge_pixels
 
-    while removed < target_removal:
+    while (np.count_nonzero(skel) - removed) > num_keep:
         edge_pixels = find_edge_pixels(skel)
         if not edge_pixels:
             break  # Stop if no more edge pixels can be safely removed
         for x, y in edge_pixels:
-            if removed >= target_removal:
+            if (np.count_nonzero(skel) - removed) <= num_keep:
                 break
             skel[x, y] = 0  # Remove pixel
             removed += 1
+
+    print(f'Number of pixels in the skeleton: {np.count_nonzero(skel)}')
 
     return skel
 
@@ -93,11 +98,14 @@ def start_traversal(skel, start_x, start_y, num_keep):
     visited = []
     dfs(skel, start_x, start_y, visited)
     # visited = list(visited)
-    print(f'Visited {len(visited)} pixels')
+    # print(f'Visited {len(visited)} pixels')
     # select out only 1 in 5 coordinates
     # perc to keep = total pixels / num_keep
     frac = len(visited) // num_keep
     visited = visited[::frac]
+    # ensure length of visited is num_keep
+    if len(visited) > num_keep:
+        visited = visited[:num_keep]
     return visited  # Returning visited for visualization or further processing
     
 def bfs_path_length(skel, start, end):
@@ -137,7 +145,7 @@ def find_nearest_with_path(skel, start, points, dist_opt=0):
     for point in points:
         if dist_opt==2:
             path_cost= bfs_path_length(skel, tuple(start), tuple(point))
-            print(f'Path cost: {path_cost}')
+            # print(f'Path cost: {path_cost}')
             if path_cost != -1:
                 distance = np.linalg.norm(start - point)
                 if distance < min_distance and path_cost < min_cost:
@@ -196,7 +204,7 @@ def calculate_angles(skel, const=10):
         if distance < min_distance:
             min_distance = distance
             x_s, y_s = x[i], y[i]
-    print(f'Starting at: {x_s}, {y_s}')
+    # print(f'Starting at: {x_s}, {y_s}')
 
     visited = start_traversal(skel, x_s, y_s, const)
 
@@ -214,16 +222,19 @@ def calculate_angles(skel, const=10):
                  
     return angles, visited, pairs_path_only, pairs_distance_only, pairs_both
 
-def get_angles(img_data, index, show=False):
+def get_angles(img_data, threshold=None, index=None, show=False):
     '''get the angles from the skeletonized image.'''
     # Preprocess the image
     img = img_data.reshape(28, 28)
-    y, x =  np.where(img > 0)
-    threshold_y = np.mean(y)
-    threshold_x = np.mean(x)
-    mean_bright = np.mean([threshold_y, threshold_x])
-    threshold = 240 - np.abs(mean_bright / 14)*52
-    img = img > threshold
+    if threshold is not None:
+        img = img > threshold
+    else:
+        y, x =  np.where(img > 0)
+        threshold_y = np.mean(y)
+        threshold_x = np.mean(x)
+        mean_bright = np.mean([threshold_y, threshold_x])
+        threshold = 240 - np.abs(mean_bright / 14)*52
+        img = img > threshold
     skel = medial_axis(img)
     # calculate the angles
     angles, visited, pairs_path_only, pairs_distance_only, pairs_both = calculate_angles(skel)
@@ -285,7 +296,12 @@ def get_angles(img_data, index, show=False):
         axs[2].plot(angles, 'b')
         axs[2].set_title('Angles')
 
-        plt.savefig(f'results2/skeleton_{index}.pdf')
+        if index is not None:
+            plt.savefig(f'results2/skeleton_{index}.pdf')
+        else:
+            # use time to save
+            timestamp = time.time()
+            plt.savefig(f'results2/skeleton_{timestamp}.pdf')
         plt.show()
 
         # count numbers of non-zero pixels
@@ -298,6 +314,83 @@ def get_angles(img_data, index, show=False):
     else:
         return angles
 
+def get_angles_mean(X, y):
+    ''''get mean of angles for each class and fit a polynomial'''
+    X_split = {}
+    for i in np.unique(y):
+        X_split[i] = X[y == i]
+
+    # get the means
+    angles_dict = {}
+    # get mean of each image for each class
+    for i in range(10):
+        X_i = X_split[i]
+        for x_i in X_i:
+            x_i = x_i.reshape(28, 28)
+        X_i_mean = np.mean(X_i, axis=0)
+        X_i_mean = X_i_mean.reshape(28, 28)
+        angles = get_angles(X_i_mean, threshold=120)
+        angles_dict[i] = angles
+
+    # save each angle_ls to separate csv since they have different lengths
+    # for i in range(10):
+    #     angles = angles_dict[i]
+    #     df = pd.DataFrame(angles)
+    #     df.to_csv(f'results2/angles_{i}.csv', index=False)
+        
+    angles_df = pd.DataFrame(angles_dict)
+    angles_df.to_csv('results2/angles.csv', index=False)
+
+    # fit a polynomial to each angle
+    # polyfits = {}
+    # for i in range(10):
+    #     angles = angles_dict[i]
+    #     x = np.arange(len(angles))
+    #     y = angles
+    #     # fit a polynomial
+    #     p = np.polyfit(x, y, 5)
+    #     print(f'Class {i}: {p}')
+    #     polyfits[i] = p
+
+
+    # plot
+    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    axs = axs.ravel()
+    for i in range(10):
+        axs[i].plot(angles_dict[i])
+        # axs[i].plot(np.polyval(polyfits[i], x), 'r')
+        axs[i].set_title(f'Class {i}')
+    plt.savefig('results2/angles_mean.pdf')
+    plt.show()
+
+def predict_angles(X,y):
+    angles_df = pd.read_csv('results2/angles.csv')
+    print(angles_df.columns)
+    def error(x, y):
+        return np.mean(np.abs(x - y))
+    num_correct = 0
+    total = 0
+    for j, x in tqdm(enumerate(X)):
+        try:
+            angles = get_angles(x, threshold=120)
+            # compare with each target
+            errors = [error(angles, angles_df[str(i)]) for i in range(10)]
+            pred_class = np.argmin(errors)
+            if pred_class == y[j]:
+                num_correct += 1
+            total += 1
+        except:
+            continue
+    print(f'Accuracy: {num_correct / total}')
+
+
+    
+
+    
+
+    
+    
+
 if __name__ == '__main__':
     # Load the data
     if not os.path.exists('results_skel'):
@@ -307,8 +400,11 @@ if __name__ == '__main__':
     y_train = np.load('data/y_train.npy', allow_pickle=True)
     y_train = y_train.astype(int)
 
-    index = np.random.randint(0, len(X_train))
-    get_angles(X_train[index], index, show=True)
+    # index = np.random.randint(0, len(X_train))
+    # get_angles(X_train[index], index, show=True)
+
+    # get_angles_mean(X_train, y_train)
+    predict_angles(X_train, y_train)
 
 
 #    for x in range(skel.shape[0]):
