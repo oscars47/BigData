@@ -13,6 +13,12 @@ from tqdm import tqdm
 from copy import deepcopy
 from datetime import datetime
 from scipy.ndimage import label
+import cv2
+from scipy.interpolate import interp1d, splev, splprep
+from scipy.integrate import simps
+from vec_angles import *
+import json
+from dtw import dtw
 
 def comp_skel(img_data, threshold=230,  index=None, num_class=None):
     img = img_data.reshape(28, 28)
@@ -43,7 +49,7 @@ def comp_skel(img_data, threshold=230,  index=None, num_class=None):
         plt.savefig(f'results_skel/skel_{time}.pdf')
     plt.show()
 
-def determine_threshold(X, y):
+def determine_threshold_old(X, y):
     # separate out each class
     X0 = X[y == 0]
     X1 = X[y == 1]
@@ -80,6 +86,41 @@ def determine_threshold(X, y):
         axs[i].hist(thresholds_dict[i], bins=100)
         axs[i].set_title(f'Class {i}')
     plt.savefig('results_skel/thresholds.pdf')
+
+def determine_threshold(X, y):
+    print('Determining Thresholds')
+    # separate out each class
+    X0 = X[y == 0]
+    X1 = X[y == 1]
+    X2 = X[y == 2]
+    X3 = X[y == 3]
+    X4 = X[y == 4]
+    X5 = X[y == 5]
+    X6 = X[y == 6]
+    X7 = X[y == 7]
+    X8 = X[y == 8]
+    X9 = X[y == 9]
+   
+   # count the number of pixels in each class above 50
+    thresholds_dict = {}
+    for i, X in tqdm(enumerate([X0, X1, X2, X3, X4, X5, X6, X7, X8, X9])):
+        for img in X:
+            img = img.reshape(28, 28)
+            img = img[img > 50]
+            img_mean = np.mean(img)
+            threshold = img_mean 
+            if i not in thresholds_dict:
+                thresholds_dict[i] = [threshold]
+            else:
+                thresholds_dict[i].append(threshold)
+    
+    # plot the thresholds
+    fig, axs = plt.subplots(5, 2, figsize=(20, 20))
+    axs = axs.flatten()
+    for i in range(10):
+        axs[i].hist(thresholds_dict[i], bins=100)
+        axs[i].set_title(f'Class {i}')
+    plt.savefig('results_skel/thresholds_meannum.pdf')
 
 ## fitting 0 and 1 ##
 def fit_0_1(img, target=0):
@@ -441,20 +482,33 @@ def dfs(matrix, start, end, path=[], visited=set()):
     return None
 
 ## find points of max directions ##
-def find_max_directions(img_data, threshold=None, show_plot=True, index=None, num_class=None):
+def find_max_directions(img_data, threshold=None, show_plot=True, index=None, num_class=None, alpha=3e-1, min_threshold=160, is_skel=False):
     '''computes the number of directions it is possible to walk on '''
     img = img_data.reshape(28, 28)
-    y, x =  np.where(img > 0)
-    threshold_y = np.mean(y)
-    threshold_x = np.mean(x)
-    mean_bright = np.mean([threshold_y, threshold_x])
-    # print('Mean Brightness:', mean_bright)
     
-    if threshold is None:
-        threshold = 240 - np.abs(mean_bright / 14)*52
-    
-    img = img > threshold
-    img = medial_axis(img).astype(int)
+    if not(is_skel):
+        if threshold is None:
+            # y, x =  np.where(img > 0)
+            # threshold_y = np.mean(y)
+            # threshold_x = np.mean(x)
+            # mean_bright = np.mean([threshold_y, threshold_x])
+            # threshold = 240 - np.abs(mean_bright / 14)*52
+            # If 'img' is not already in 8-bit single-channel format, convert it
+            # if len(img.shape) == 3:  # Check if the image has 3 channels (BGR)
+            #     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # elif img.dtype != np.uint8:  # Check if the image is not 8-bit
+            #     img = cv2.convertScaleAbs(img)  # Converts to 8-bit if necessary
+            # else:
+            #     img = img  # No conversion needed
+            # threshold = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 30) > 100
+            
+            img_mean = np.mean(img[img >= min_threshold])
+            threshold = np.max([255 - alpha*img_mean, min_threshold])
+            # print('Threshold:', threshold)
+        
+        img = img > threshold
+        img = medial_axis(img).astype(int)
+
 
     def count_directions(img):
         # go through each pixel and find the number of possible directions
@@ -559,6 +613,155 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
 
         return final_indices
 
+    def get_angles(feature_array, search_radius=5):
+        '''breadth first search to trace the feature'''
+
+        def calc_angle(p1, p2):
+            '''compute the angle between two points using atan2'''
+            dy = p2[1] - p1[1]
+            dx = p2[0] - p1[0]
+            angle = np.arctan2(dy, dx)
+            return np.degrees(angle)  # convert to degrees
+    
+        # Ensure binary representation
+        img = np.where(feature_array > 0, 1, 0)
+        
+        # Get non-zero indices
+        y, x = np.where(img > 0)
+        points = list(zip(y, x))
+        
+        # choose the starting point 
+        directions = count_directions(img)
+        # start at the point with only 1 direction
+        # choose the first one
+        start = ((directions == 1) & (img == 1)).argmax()
+        start = np.unravel_index(start, directions.shape)
+
+        print('Start:', start)
+
+        visited = set()
+        visited.add(start)
+        current = start
+        path = [current]  # Keep track of the order of visited points
+
+        while len(visited) < len(points):
+            next_point = None
+            min_distance = float('inf')
+
+            for dy in range(-search_radius, search_radius + 1):
+                for dx in range(-search_radius, search_radius + 1):
+                    if dy == 0 and dx == 0:
+                        continue  # skip current point
+                    
+                    pot_point = (current[0] + dy, current[1] + dx)
+                    if 0 <= pot_point[0] < img.shape[0] and 0 <= pot_point[1] < img.shape[1]: # within image bounds
+                        if img[pot_point[0], pot_point[1]] != 0 and pot_point not in visited:
+                            distance = np.sqrt(dy**2 + dx**2)
+
+                            if distance < min_distance: 
+                                next_point = pot_point
+                                min_distance = distance
+            
+            if next_point:
+                visited.add(next_point)
+                path.append(next_point)
+                current = next_point
+                print(current)
+            else:
+                # no more reachable points
+                print('No more reachable points')
+                break
+
+        plt.imshow(img, cmap='gray')
+        for i in range(len(path)-1):
+            plt.plot([path[i][1], path[i+1][1]], [path[i][0], path[i+1][0]], 'r')
+            # delay for visualization
+            plt.pause(0.1)
+        plt.show()
+        # print('Current:', current)
+
+        # get the angles based on the order of the visited points
+        angles = []
+        visited = list(visited)
+        for i in range(len(visited)-1):
+            angles.append(calc_angle(visited[i], visited[i+1]))
+
+        return angles
+
+     # fit a spline through the start and end of each manifold
+    
+    def fit_parametric_spline(feature_array, num_features):
+        x_splines = []
+        y_splines = []
+
+        for i in range(1, num_features + 1):
+            # Extract the points for the current feature
+            y, x = np.where(feature_array == i)
+
+            # start where directions == 1 OR pick a random point if no directions == 1
+            directions = count_directions(feature_array==i)
+            # print('Directions:', directions)
+            one_direction = np.where(directions == 1)
+            # print(one_direction)
+            if len(one_direction) > 1:
+                # sort tuples by x value
+                one_direction = sorted(list(zip(one_direction[0], one_direction[1])), key=lambda x: x[1])
+                # print('One Direction:', one_direction)
+
+                try:
+                    start_y, start_x = one_direction[0]
+                except:
+                    start_y, start_x = y[0], x[0]
+                
+            else:
+                start_x = x[0]
+                
+
+            # trace along the curve using DFS
+            path = start_traversal(feature_array==i, start_y, start_x, num_keep=None)
+
+
+            # use the path to fit a spline
+            y, x = zip(*path)
+
+            # Fit a spline to the points
+            try:
+                tck, u = splprep([x, y], s=20)
+                x_spline, y_spline = splev(u, tck)
+                x_splines.append(x_spline)
+                y_splines.append(y_spline)
+            except TypeError:
+                continue
+            
+        combined_x = []
+        combined_y = []
+        # After the loop, concatenate the spline segments
+        for x_spline, y_spline in zip(x_splines, y_splines):
+            combined_x.extend(x_spline)
+            combined_y.extend(y_spline)
+
+        # Convert combined splines to numpy arrays
+        combined_x = np.array(combined_x)
+        combined_y = np.array(combined_y)
+
+        if len(combined_x) == 0:
+            print('No splines found')
+            return [], [], [], 0
+
+        # Compute the first and second derivatives of the combined curve
+        dx = np.gradient(combined_x)
+        dy = np.gradient(combined_y)
+        ddx = np.gradient(dx)
+        ddy = np.gradient(dy)
+
+        # Calculate the curvature kappa(t) of the combined curve
+        curvature = (dx * ddy - dy * ddx) / np.power(dx**2 + dy**2, 1.5)
+        
+        # Integrate the curvature over t to find the net curvature of the image
+        net_curvature = simps(curvature)
+
+        return x_splines, y_splines, curvature, net_curvature
+
     y, x = np.where(img == 1)
     center = (np.mean(y), np.mean(x))
 
@@ -569,27 +772,41 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
     # max_direction = np.max(directions)
     # print('Max Directions:', max_direction)
     final_indices = find_final_indices(directions)
-
+    non_manifold = deepcopy(final_indices)
 
     if len(final_indices) == 0:
+        # plt.imshow(img, cmap='gray')
+        # plt.show()
+        x_splines, y_splines, curvature, net_curvature = fit_parametric_spline(img, 1)
+
         if show_plot:
-            fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-            cmap = axs[0].imshow(directions, cmap='hot')
-            fig.colorbar(cmap, ax=axs[0])
+            directions = count_directions(img)
+            fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+            axs = axs.ravel()
+            axs[0].imshow(img, cmap='gray') 
             axs[0].scatter(center[1], center[0], color='green')
-            axs[0].set_title('Heatmap of Directions')
-            cmap2 = axs[1].imshow(img, cmap='nipy_spectral')
+            axs[0].set_title('Skeletonized Image')
+            axs[1].imshow(directions, cmap='hot')
+            axs[1].scatter(center[1], center[0], color='green')
+            axs[1].set_title('Heatmap of Directions')
+            cmap = axs[2].imshow(directions, cmap='hot')
+            fig.colorbar(cmap, ax=axs[2])
+            axs[2].scatter(center[1], center[0], color='green')
+            axs[2].set_title('Heatmap of Directions')
+            cmap2 = axs[3].imshow(img, cmap='nipy_spectral')
             fig.colorbar(cmap2, ax=axs[1])
-            axs[1].set_title('Cut Skeletonized Image')
+            axs[3].set_title('Cut Skeletonized Image')
+            for i in range(len(x_splines)):
+                axs[3].plot(x_splines[i], y_splines[i], 'r')
 
             if index is not None and num_class is not None:
                 plt.savefig(f'results_skel/directions_{num_class}_{index}.pdf')
             else:
                 time = datetime.now().strftime("%Y%m%d_%H%M%S")
                 plt.savefig(f'results_skel/directions_{time}.pdf')
-            plt.show()
+            # plt.show()
 
-        return img
+        return img, curvature
 
     # remove the max connected points
     for i in final_indices:
@@ -609,6 +826,7 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
             final_indices_2 = find_final_indices(directions_2)
             for j in final_indices_2:
                 manifold[j[0], j[1]] = 0
+                non_manifold.append(j)
         manifolds.append(manifold)
     
     result = np.zeros(img.shape)
@@ -619,38 +837,206 @@ def find_max_directions(img_data, threshold=None, show_plot=True, index=None, nu
 
     # remove manifolds with only 1 pixel
     for i in range(1, num_features+1):
-        if np.sum(labeled_array == i) == 1:
+        if np.sum(labeled_array == i) == 1 or np.sum(labeled_array == i) == 2:
             result[labeled_array == i] = 0
 
     directions = count_directions(result)
     final_indices = find_final_indices(directions)
+    
+    # add back non-manifold points
+    for i in non_manifold:
+        # labeled_array[i[0], i[1]] = num_features + 1
+        result[i[0], i[1]] = 1
+
+    # separate out the manifolds, i.e. the separate connected components
+    directions = count_directions(result)
+    final_indices = find_final_indices(directions)
+
+    # remove the max connected points
+    for i in final_indices:
+        result[i[0], i[1]] = 0
+
+    labeled_array, num_features = label(result, structure=np.ones((3, 3)))
+    # if there
+    # print('Number of Features:', num_features)
+
+    def find_unique_points(x, y):
+        '''ensure no duplicate xs'''
+        seen_x = set()
+        points = []
+
+        # Indices for start, 1st quarter, middle, 3rd quarter, end
+        # indices = [0, len(x) // 4, len(x) // 2, 3 * len(x) // 4, len(x) - 1]
+        indices=[0, len(x) // 2, len(x) - 1]
+
+        for idx in indices:
+            # Adjust index if x[idx] is a duplicate
+            while x[idx] in seen_x and idx < len(x) - 1:
+                idx += 1  # Move to the next index
+
+            # Add the (y, x) tuple if x[idx] is unique
+            if x[idx] not in seen_x:
+                points.append((y[idx], x[idx]))
+                seen_x.add(x[idx])
+                print('Unique:', x[idx])
+
+        return points
+
+
+        # remove any islands, i.e. points with directions <= 2
+    
+    directions = np.where(directions >= 2, directions, 0)
+    result = np.where(directions >= 2, 1, 0)
+    labeled_array, num_features = label(result, structure=np.ones((3, 3)))
+
+    x_splines, y_splines, curvature, net_curvature = fit_parametric_spline(labeled_array, num_features)
+
+    # now again remove non-manifold points (idea is that some of them might not be non-manifold anymore and would help connect the digit)
+
+    # get separate manifolds
+    manifolds = []
+    for i in range(1, num_features+1):
+        manifold = np.where(labeled_array == i, 1, 0)
+        # ensure it's a manifold
+        while not is_manifold(manifold):
+            # find the max directions and repeat process
+            directions_2 = count_directions(manifold)
+            final_indices_2 = find_final_indices(directions_2)
+            for j in final_indices_2:
+                manifold[j[0], j[1]] = 0
+                non_manifold.append(j)
+        manifolds.append(manifold)
+    
+    result = np.zeros(img.shape)
+    for i, manifold in enumerate(manifolds):
+        result += manifold
 
     labeled_array, num_features = label(result, structure=np.ones((3, 3)))
 
-    # print('Closed:', closed)
-       
+    # remove any islands
+    directions = count_directions(result)
+    directions = np.where(directions >= 2, directions, 0)
+    result = np.where(directions >= 2, 1, 0)
+    
+
+    # compute angles on the labeled array
+    # scipy.ndimage.label automatically labels with lower numbers first towards the upper right
+    # angles= get_angles(labeled_array)
+
     # plot img and heatmap
     if show_plot:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        cmap = axs[0].imshow(directions, cmap='hot')
-        fig.colorbar(cmap, ax=axs[0])
+        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+        axs = axs.flatten()
+        axs[0].imshow(img_data.reshape(28,28), cmap='gray')
+        axs[0].set_title('Original Image')
+        axs[1].imshow(img_data.reshape(28,28)>threshold, cmap='gray')
+        axs[1].set_title('Thresholded Image')
+
+        cmap = axs[2].imshow(directions, cmap='hot')
+        fig.colorbar(cmap, ax=axs[2])
         final_indices_x = [i[0] for i in final_indices]
         final_indices_y = [i[1] for i in final_indices]
-        axs[0].scatter(final_indices_y, final_indices_x, color='blue')
-        axs[0].scatter(center[1], center[0], color='green')
-        axs[0].set_title('Heatmap of Directions')
-        cmap2 = axs[1].imshow(labeled_array, cmap='nipy_spectral')
-        fig.colorbar(cmap2, ax=axs[1])
-        axs[1].set_title('Cut Skeletonized Image')
+        axs[2].scatter(final_indices_y, final_indices_x, color='blue')
+        axs[2].scatter(center[1], center[0], color='green')
+        axs[2].set_title('Heatmap of Directions')
+        cmap2 = axs[3].imshow(labeled_array, cmap='nipy_spectral')
+        fig.colorbar(cmap2, ax=axs[3])
+        axs[3].set_title('Cut Skeletonized Image')
+        for i in range(len(x_splines)):
+            axs[3].plot(x_splines[i], y_splines[i], color='red')
+        # threshold = np.round(threshold,3)
+        # plt.suptitle(f'Threshold: {threshold}')
+        plt.tight_layout()
 
         if index is not None and num_class is not None:
             plt.savefig(f'results_skel/directions_{num_class}_{index}.pdf')
         else:
             time = datetime.now().strftime("%Y%m%d_%H%M%S")
             plt.savefig(f'results_skel/directions_{time}.pdf')
-        plt.show()
+        # plt.show()
 
-    return labeled_array
+        # plot the splines and curvature
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        for i in range(len(x_splines)):
+            axs[0].plot(y_splines[i], x_splines[i], color='red')
+        axs[0].set_title('Splines')
+        axs[1].plot(curvature)
+        axs[1].set_title(f'Net Curvature {net_curvature}')
+        plt.savefig(f'results_skel/splines_curvature_{num_class}_{index}.pdf')
+        # plt.show()
+
+
+    return labeled_array, curvature
+
+def classify_curvature(X, y, mean_curvatures_fp = 'results_skel/curvatures.json', possible_classes = range(10)):
+    '''perform classification based on curvature'''
+    def dtw_custom(ts1, ts2):
+        # Initialize the DTW matrix
+        n, m = len(ts1), len(ts2)
+        dtw_matrix = np.full((n + 1, m + 1), np.inf)
+        dtw_matrix[0, 0] = 0
+
+        # Compute the DTW matrix
+        for i in range(1, n + 1):
+            for j in range(1, m + 1):
+                cost = abs(ts1[i - 1] - ts2[j - 1])
+                # Take the minimum of the three adjacent cells
+                last_min = min(dtw_matrix[i - 1, j],    # insertion
+                            dtw_matrix[i, j - 1],    # deletion
+                            dtw_matrix[i - 1, j - 1]) # match
+                dtw_matrix[i, j] = cost + last_min
+
+        # The distance is in the bottom-right corner of the matrix
+        return dtw_matrix[n, m]
+    
+    mean_curvatures = json.load(open(mean_curvatures_fp, 'r'))
+    mean_curvatures = dict(mean_curvatures)
+
+    # normalize the curvatures
+    # for i in range(10):
+    #     mean_curvatures[str(i)] = (mean_curvatures[str(i)] - np.min(mean_curvatures[str(i)])) / (np.max(mean_curvatures[str(i)]) - np.min(mean_curvatures[str(i)]))
+    
+    # process each x in X
+    X_curvatures = [find_max_directions(img, threshold=None, show_plot=False, is_skel=False)[1] for img in tqdm(X)]
+
+    # classify using DTW
+    y_pred = []
+    for x in tqdm(X_curvatures):
+        # x  = (x - np.min(x)) / (np.max(x) - np.min(x))
+        try:
+            distances = [dtw(x, mean_curvatures[str(i)]).distance for i in possible_classes]
+            y_pred.append(np.argmin(distances))
+            # max_cross_corr = -np.inf
+            # max_idx = None
+
+            # for i in range(10):
+            #     # Compute full cross-correlation
+            #     cross_corr_values = np.correlate(x, mean_curvatures[str(i)], mode='full')
+            #     # Find the maximum value of the cross-correlation
+            #     cross_corr_max = np.max(cross_corr_values)
+                
+            #     if cross_corr_max > max_cross_corr:
+            #         max_cross_corr = cross_corr_max
+            #         max_idx = i
+
+            # y_pred.append(max_idx)
+        except IndexError:
+            print('Index Error')
+            y_pred.append(0)
+
+    # calculate accuracy
+    accuracy = np.mean(y_pred == y)
+    print(f'Accuracy: {accuracy}')
+
+    # find where the errors are
+    # errors = np.where(y_pred != y)[0]
+    # # plot the curvatures
+    # for error in errors:
+    #     print(error)
+    #     plt.plot(X_curvatures[error])
+    #     plt.title(f'Curvature {error} Predicted {y_pred[error]} Actual {y[error]}')
+    #     plt.show()
+        
 
 def get_mean_std_cuts(X, y):
     '''for each class, get all of the labeled arrays and compute the mean and std'''
@@ -695,6 +1081,88 @@ def get_mean_std_cuts(X, y):
 
     return mean_std
 
+def get_mean_curvature(X, y, calculate_means=False):
+    '''for each class, get all of the labeled arrays and compute the mean and std'''
+    # break up X into different classes
+    unique_targets = np.unique(y_train)
+    
+    X_train_split = {}
+    for i in unique_targets:
+        X_train_split[i] = X_train[y_train == i]
+
+    if calculate_means:
+
+        # create means of the image for each digit
+        curvatures = {}
+        # labeled_arrays = {}
+        # thresholds = [60, 60, 60, 40, 50, 60, 60, 60, 60, 60]
+        thresholds = [112]*10
+        # thresholds[1]=50
+        # thresholds[2]=50
+        # thresholds[3]=45
+        # thresholds[5]=30
+        # thresholds[7]=30
+        thresholds[0]=120
+        thresholds[3]=80
+        thresholds[4]=80
+        thresholds[5]=60
+        thresholds[8]=85
+        thresholds[9]=80
+        
+
+        for i in unique_targets:
+            means_i = np.mean([img for img in X_train_split[i]], axis=0).reshape(28, 28)
+            skel = medial_axis(means_i > thresholds[i]).astype(int)
+            fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+            axs[0].imshow(skel, cmap='gray')
+            axs[0].set_title(f'Mean Skeleton {i}')
+            axs[1].imshow(means_i, cmap='gray')
+            axs[1].set_title(f'Mean Image {i}')
+            # save as text
+            np.savetxt(f'results_skel/mean_skel_{i}.txt', skel, fmt='%d')
+            plt.show()
+   
+    else:
+        curvatures = {}
+        skels = {}
+        # read in the text files
+        for i in unique_targets:
+            skel = np.loadtxt(f'results_skel/mean_skel_{i}.txt')
+            skels[i] = skel
+            curvatures[i] = find_max_directions(deepcopy(skel), show_plot=False, index=i, num_class=i,  is_skel=True)[1]
+            
+        # labeled_array_i, curvature_i = find_max_directions(means_i, threshold=40, show_plot=True, num_class=i, index='all')
+        # curvatures[i] = curvature_i      
+
+    # plot the means
+    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    axs = axs.flatten()
+    for i in np.unique(y):
+        skel = skels[i]
+        axs[i].imshow(skel, cmap='gray')
+        axs[i].set_title(f'Mean Skeleton {i}')
+
+    plt.savefig('results_skel/mean_skel.pdf')
+
+    # plot the curvature, which is at the 1 index of the labeled array
+    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    axs = axs.flatten()
+    for i in np.unique(y):
+        curvature = curvatures[i]
+        axs[i].plot(curvature)
+        axs[i].set_title(f'Mean Curvature {i}')
+
+    plt.savefig('results_skel/mean_curvature.pdf')
+
+    # Convert numpy.int64 keys to int (or str, depending on your requirement)
+    curvatures_serializable = {int(key): list(value) for key, value in curvatures.items()}
+
+    # Save the curvatures as JSON
+    with open('results_skel/curvatures.json', 'w') as file:
+        json.dump(curvatures_serializable, file)
+    
+    
+
 if __name__ == '__main__':
     X_train = np.load('data/X_train.npy', allow_pickle=True)
     y_train = np.load('data/y_train.npy', allow_pickle=True)
@@ -711,12 +1179,43 @@ if __name__ == '__main__':
     eights = X_train[y_train == 8]
     nines = X_train[y_train == 9]
 
-    index = 5
-    find_max_directions(fives[index], index=index, num_class=5, threshold=None)
+    X_zeros_ones_nines = X_train[np.isin(y_train, [0, 1, 9])][:1000]
+    y_zeros_ones_nines = y_train[np.isin(y_train, [0, 1, 9])][:1000]
+
+    X_zeros_ones = X_train[np.isin(y_train, [0, 1])][:1000]
+    y_zeros_ones = y_train[np.isin(y_train, [0, 1])][:1000]
+
+    
+    get_mean_curvature(X_train, y_train)
+    classify_curvature(X_zeros_ones, y_zeros_ones, possible_classes=[0, 1])
+    classify_curvature(X_zeros_ones_nines, y_zeros_ones_nines, possible_classes=[0, 1, 9])
+    # classify_curvature(X_train, y_train, possible_classes=range(10))
+
+    X_test = np.load('data/X_test.npy', allow_pickle=True)
+    y_test = np.load('data/y_test.npy', allow_pickle=True)
+    y_test = y_test.astype(int)
+
+    X_zeros_ones_nines_test = X_test[np.isin(y_test, [0, 1, 9])][:1000]
+    y_zeros_ones_nines_test = y_test[np.isin(y_test, [0, 1, 9])][:1000]
+
+    X_zeros_ones_test = X_test[np.isin(y_test, [0, 1])][:1000]
+    y_zeros_ones_test = y_test[np.isin(y_test, [0, 1])][:1000]
+
+    classify_curvature(X_zeros_ones_test, y_zeros_ones_test, possible_classes=[0, 1])
+    classify_curvature(X_zeros_ones_nines_test, y_zeros_ones_nines_test, possible_classes=[0, 1, 9])
+    # classify_curvature(X_test, y_test, possible_classes=range(10))
+
+
+    index = 21
+    digit_ls = [zeros, ones, twos, threes, fours, fives, sixes, sevens, eights, nines]
+    for i, digit in enumerate(digit_ls):
+        find_max_directions(digit[index], index=index, num_class=i, threshold=None)
     # comp_skel(fours[index], index=index, num_class=4, threshold=100)
 
-    # get_mean_std_cuts(X_train, y_train)
 
+
+
+    # get_mean_std_cuts(X_train, y_train)
     # determine_threshold(X_train, y_train)
 
 

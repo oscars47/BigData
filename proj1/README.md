@@ -1,4 +1,69 @@
 # Project 1: Predicting MNIST digits using direct algorithm
+video presentation 1: https://youtu.be/z8MzZwYQ8K0
+
+## 3/27/24
+* start 2pm-2:37pm, 4:45-5:40pm, 8:20pm-11pm. 1:55am - 3:30am. 4:10 am - 
+* goal: understand the components of the cuts
+    - removed the automatic add back connectivity feature
+    - updated alpha = 3e-1, min_threshold=160
+    - how to deal with >1 max connected removed point..?
+    - what about this: fit spline through start, middle, and end points of each manifold in order to smooth the digits. recombine the pieces. in ```bsh_redo.py```
+        - use scipy.interpolate.interp1d
+        - stitch togehter 
+        - now we can analyze the curvature as we traverse the digit
+        - need to account for case where we dont need to cut anything like a 1 or 0
+        - for cut pieces:
+            - check if manifold is open or closed. fit spline to evenly sampled points around the manifold. need parametric spline (splev, splprep). no problem with this is how the y and x are organized is not the same as 
+            - using the same appraoch we had for angles earlier which samples as the point walks for angles, except using all pointsd with a smoothing factor of c = 2 for quadratic.
+        - now need to connect the splines together and measure curvature
+            - results for 3 and 9 suggest that there is a common pattern
+            - use curvature results for mean. need to set correct thresholds. used estimate and then manually edited the .text files for the images
+    - need to fix the target digits manually and rerun and save curvature plots. *plan*: use curvature to compare 0 vs 1 vs 9. then compare all digits
+        - fixed target digits
+        - thought for later: we might need to have different example of 7 with a bar
+        - using dynamic time warping to quantify similarity. the ```dtw-python``` package does slightly better (about .015) than the custom.
+            0.413 on first 1000 train for 0, 1, 9
+            0.446 on first 1000 test for 0, 1, 9
+
+            0.705 on first 1000 train for 0, 1
+            0.68 on first 1000 test for 0, 1 
+
+            for all data:
+                train
+                    0, 1: 0.7015552753257671
+                    0, 1, 9: 0.4440639269406393
+                    all: 0.23573660714285713
+
+            adding back non-manifold increases connectivity and hence accuracy:
+
+            on first 1000 digits, s=20:
+                train: 
+                    0,1: 0.853
+                    0,1,9: 0.597
+                test:
+                    0,1: 0.848
+                    0,1,9: 0.57
+
+        - what about using maximum cross-correlation coefficient?
+            - like 0 accuracy...no
+
+## 3/26/24
+* start 1:50pm, end 2pm. 4:45pm - 6:04pm. 7:19pm-9:33pm
+* thresholding
+    - from histograms, appears that 150 is the min, so using that
+* doing angles
+    - need to keep track of points we remove?
+    - added ```get_angles```, but not interting all the way through the omage for some reason
+* making presentation for meeting
+
+## 3/25/24
+* start 1:20pm, end 2:40pm
+* strategizing about how to classify the digits. plan is to first fix the thresholding by considering the total number of squares > 50, then cut. then apply the angle method to every point in the manifolds stitched together.
+    - added ```determine_threshold```, which replaced the previous function of same name. runs very fast, so there must've been some other problem when i tried this same idea before.
+
+    thinking ```threshold = 240 - |img_mean/200|```
+
+    - found cv2 has an adaptive thresholding function that works on specific regions of the image. doesn't work well to preserve overall important features
 
 ## 3/19/24
 * start 4:35pm, end 7pm, including meeting. 8:30pm start, 8:40pm. 
@@ -8,6 +73,7 @@
 * then will fit line to mean of angles for each digit, use this to predict
     - fixed issue where didn't include exactly ```num_keep```
     - added ```predict_angles``` using ```angles.csv```.
+    - 29.73% accurate
 
 * get all labeled graph
     -  use skeleton
